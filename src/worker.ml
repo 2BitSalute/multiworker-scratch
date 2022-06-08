@@ -1,15 +1,10 @@
 (*
+ * Copyright (c) 2022, Tatiana Racheva
  * Copyright (c) 2015, Facebook, Inc.
- * All rights reserved.
  *
  * This source code is licensed under the MIT license found in the
- * LICENSE file in the "hack" directory of this source tree.
- *
+ * LICENSE file in the root directory of this source tree.
  *)
-
-module CamlGc = Gc
-open Hh_prelude
-module Gc = CamlGc
 
 (*****************************************************************************
  * The job executed by the worker.
@@ -133,13 +128,11 @@ let read_and_process_job ic oc : job_outcome =
         if len > 30 * 1024 * 1024 (* 30 MiB *) then (
           Hh_logger.log
             ("WARNING(WORKER_LARGE_DATA_SEND): you are sending quite a lot of "
-            ^^ "data (%d bytes), which may have an adverse performance impact. "
-            ^^ "If you are sending closures, double-check to ensure that "
-            ^^ "they have not captured large values in their environment.")
+             ^^ "data (%d bytes), which may have an adverse performance impact. "
+             ^^ "If you are sending closures, double-check to ensure that "
+             ^^ "they have not captured large values in their environment.")
             len;
-          HackEventLogger.worker_large_data_send
-            ~path:Relative_path.default
-            (Telemetry.create () |> Telemetry.int_ ~key:"len" ~value:len)
+          (Telemetry.create () |> Telemetry.int_ ~key:"len" ~value:len)
         );
 
         Measure.sample "worker_response_len" (float len);
@@ -260,17 +253,17 @@ let maybe_send_status_to_controller fd status =
       ignore (Marshal_tools.to_fd_with_preamble fd msg : int)
     in
     (match status with
-    | Unix.WEXITED 0 -> ()
-    | Unix.WEXITED code when code = controller_has_died_code ->
-      (* Since the controller died we'd get an error writing to its
-       * fd; so we simply do not do anything. *)
-      ()
-    | _ ->
-      Timeout.with_timeout
-        ~timeout:10
-        ~on_timeout:(fun _ ->
-          Hh_logger.log "Timed out sending status to controller")
-        ~do_:(fun _ -> to_controller fd (Subprocess_terminated status)))
+     | Unix.WEXITED 0 -> ()
+     | Unix.WEXITED code when code = controller_has_died_code ->
+       (* Since the controller died we'd get an error writing to its
+        * fd; so we simply do not do anything. *)
+       ()
+     | _ ->
+       Timeout.with_timeout
+         ~timeout:10
+         ~on_timeout:(fun _ ->
+             Hh_logger.log "Timed out sending status to controller")
+         ~do_:(fun _ -> to_controller fd (Subprocess_terminated status)))
 
 (* On Unix each job runs in a forked process. The first thing these jobs do is
  * deserialize a marshaled closure which is the job.
@@ -305,7 +298,7 @@ let dummy_closure () = ()
  * real exit status (includinng WSIGNALED and WSTOPPED) will be sent over
  * this file descriptor to the controller when the clone worker exits
  * abnormally (with a non-zero exit code).
- *)
+*)
 let unix_worker_main restore (state, controller_fd) (ic, oc) =
   restore state;
   (* see dummy_closure above *)
@@ -321,27 +314,27 @@ let unix_worker_main restore (state, controller_fd) (ic, oc) =
     match Fork.fork () with
     | 0 ->
       (match process_job_and_exit ic oc with
-      | `Controller_has_died -> exit controller_has_died_code)
+       | `Controller_has_died -> exit controller_has_died_code)
     | pid ->
       (* Wait for the clone process termination... *)
       let status = snd (Sys_utils.waitpid_non_intr [] pid) in
       let () = maybe_send_status_to_controller controller_fd status in
       (match status with
-      | Unix.WEXITED 0 -> ()
-      | Unix.WEXITED code when code = controller_has_died_code ->
-        (* The controller has died, we can stop working *)
-        exit 0
-      | Unix.WEXITED code ->
-        Printf.printf "Worker exited (code: %d)\n" code;
-        Stdlib.flush stdout;
-        Stdlib.exit code
-      | Unix.WSIGNALED x ->
-        let sig_str = PrintSignal.string_of_signal x in
-        Printf.printf "Worker interrupted with signal: %s\n" sig_str;
-        exit 2
-      | Unix.WSTOPPED x ->
-        Printf.printf "Worker stopped with signal: %d\n" x;
-        exit 3)
+       | Unix.WEXITED 0 -> ()
+       | Unix.WEXITED code when code = controller_has_died_code ->
+         (* The controller has died, we can stop working *)
+         exit 0
+       | Unix.WEXITED code ->
+         Printf.printf "Worker exited (code: %d)\n" code;
+         Stdlib.flush stdout;
+         Stdlib.exit code
+       | Unix.WSIGNALED x ->
+         let sig_str = PrintSignal.string_of_signal x in
+         Printf.printf "Worker interrupted with signal: %s\n" sig_str;
+         exit 2
+       | Unix.WSTOPPED x ->
+         Printf.printf "Worker stopped with signal: %d\n" x;
+         exit 3)
   done;
   assert false
 

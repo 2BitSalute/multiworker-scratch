@@ -1,10 +1,9 @@
 (*
+ * Copyright (c) 2022, Tatiana Racheva
  * Copyright (c) 2015, Facebook, Inc.
- * All rights reserved.
  *
  * This source code is licensed under the MIT license found in the
- * LICENSE file in the "hack" directory of this source tree.
- *
+ * LICENSE file in the root directory of this source tree.
  *)
 
 (** If a worker process fails, this is raised.
@@ -67,8 +66,8 @@ val call_with_interrupt :
     ((* [on_cancelled] should be specified if your [next] function ever returns
         [Bucket.Wait], and it should return the list of all jobs that haven't
         finished or started yet. *)
-     unit ->
-    'a list) ->
+      unit ->
+      'a list) ->
   'd interrupt_config ->
   'c * 'd * 'a list
 

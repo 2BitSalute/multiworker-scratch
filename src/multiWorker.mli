@@ -1,10 +1,9 @@
 (*
+ * Copyright (c) 2022, Tatiana Racheva
  * Copyright (c) 2015, Facebook, Inc.
- * All rights reserved.
  *
  * This source code is licensed under the MIT license found in the
- * LICENSE file in the "hack" directory of this source tree.
- *
+ * LICENSE file in the root directory of this source tree.
  *)
 
 module Hh_bucket = Bucket
@@ -12,7 +11,7 @@ open Hh_prelude
 
 (* The protocol for a next function is to return a list of elements.
  * It will be called repeatedly until it returns an empty list.
- *)
+*)
 
 module type CALLER = sig
   type 'a result
@@ -63,7 +62,7 @@ val call :
 type call_wrapper = {
   f:
     'a 'b 'c.
-    worker list option ->
+      worker list option ->
     job:('c -> 'a -> 'b) ->
     merge:('b -> 'c -> 'c) ->
     neutral:'c ->
@@ -89,8 +88,8 @@ val call_with_interrupt :
     ((* [on_cancelled] should be specified if your [next] function ever returns
         [Hh_bucket.Wait], and it should return the list of all jobs that haven't
         finished or started yet. *)
-     unit ->
-    'a list) ->
+      unit ->
+      'a list) ->
   worker list option ->
   job:('c -> 'a -> 'b) ->
   merge:('b -> 'c -> 'c) ->

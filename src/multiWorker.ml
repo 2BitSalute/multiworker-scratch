@@ -1,10 +1,9 @@
 (*
+ * Copyright (c) 2022, Tatiana Racheva
  * Copyright (c) 2015, Facebook, Inc.
- * All rights reserved.
  *
  * This source code is licensed under the MIT license found in the
- * LICENSE file in the "hack" directory of this source tree.
- *
+ * LICENSE file in the root directory of this source tree.
  *)
 
 module Hh_bucket = Bucket
@@ -21,7 +20,7 @@ let single_threaded_call_with_worker_id job merge neutral next =
   (* This is a just a sanity check that the job is serializable and so
    * that the same code will work both in single threaded and parallel
    * mode.
-   *)
+  *)
   let _ = Marshal.to_string job [Marshal.Closures] in
   while not (Hh_bucket.is_done !x) do
     match !x with
@@ -72,12 +71,12 @@ end = struct
 end
 
 module Call = CallFunctor (struct
-  type 'a result = 'a
+    type 'a result = 'a
 
-  let return x = x
+    let return x = x
 
-  let multi_threaded_call = MultiThreadedCall.call_with_worker_id
-end)
+    let multi_threaded_call = MultiThreadedCall.call_with_worker_id
+  end)
 
 let call_with_worker_id = Call.call
 
@@ -112,8 +111,8 @@ let next ?progress_fn ?max_size workers =
   Hh_bucket.make
     ~num_workers:
       (match workers with
-      | Some w -> List.length w
-      | None -> 1)
+       | Some w -> List.length w
+       | None -> 1)
     ?progress_fn
     ?max_size
 
@@ -122,7 +121,7 @@ let make = WorkerController.make
 type call_wrapper = {
   f:
     'a 'b 'c.
-    worker list option ->
+      worker list option ->
     job:('c -> 'a -> 'b) ->
     merge:('b -> 'c -> 'c) ->
     neutral:'c ->

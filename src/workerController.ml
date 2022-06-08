@@ -1,10 +1,9 @@
 (*
+ * Copyright (c) 2022, Tatiana Racheva
  * Copyright (c) 2015, Facebook, Inc.
- * All rights reserved.
  *
  * This source code is licensed under the MIT license found in the
- * LICENSE file in the "hack" directory of this source tree.
- *
+ * LICENSE file in the root directory of this source tree.
  *)
 
 open Hh_prelude
@@ -321,13 +320,13 @@ let call ?(call_id = 0) w (type a b) (f : a -> b) (x : a) : (a, b) handle =
           ~timeout:3
           ~on_timeout:(fun _ -> snd pid_stat)
           ~do_:(fun _ ->
-            try
-              let (Subprocess_terminated status) =
-                Marshal_tools.from_fd_with_preamble fd
-              in
-              status
-            with
-            | End_of_file -> snd pid_stat)
+              try
+                let (Subprocess_terminated status) =
+                  Marshal_tools.from_fd_with_preamble fd
+                in
+                status
+              with
+              | End_of_file -> snd pid_stat)
     in
     match pid_stat with
     | Unix.WEXITED i when i = Exit_status.(exit_code Out_of_shared_memory) ->
@@ -499,14 +498,14 @@ let select ds additional_fds =
   in
   List.fold_right
     ~f:(fun d acc ->
-      match snd !d with
-      | Cached _
-      | Canceled
-      | Failed _ ->
-        { acc with readys = d :: acc.readys }
-      | Processing s when List.mem ~equal:Poly.( = ) ready_fds s.infd ->
-        { acc with readys = d :: acc.readys }
-      | Processing _ -> { acc with waiters = d :: acc.waiters })
+        match snd !d with
+        | Cached _
+        | Canceled
+        | Failed _ ->
+          { acc with readys = d :: acc.readys }
+        | Processing s when List.mem ~equal:Poly.( = ) ready_fds s.infd ->
+          { acc with readys = d :: acc.readys }
+        | Processing _ -> { acc with waiters = d :: acc.waiters })
     ~init:{ readys = []; waiters = []; ready_fds = additional_ready_fds }
     ds
 

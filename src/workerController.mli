@@ -1,10 +1,9 @@
 (*
+ * Copyright (c) 2022, Tatiana Racheva
  * Copyright (c) 2015, Facebook, Inc.
- * All rights reserved.
  *
  * This source code is licensed under the MIT license found in the
- * LICENSE file in the "hack" directory of this source tree.
- *
+ * LICENSE file in the root directory of this source tree.
  *)
 
 open Hh_prelude
@@ -15,7 +14,7 @@ open Hh_prelude
  * You should first create a fixed amount of workers and then use those
  * because the amount of workers is limited and to make the load-balancing
  * of tasks better (cf multiWorker.ml).
- *)
+*)
 (*****************************************************************************)
 
 type process_id = int
@@ -48,7 +47,7 @@ type worker
 (* The handle is what we get back when we start a job. It's a "future"
  * (sometimes called a "promise"). The scheduler uses the handle to retrieve
  * the result of the job when the task is done (cf multiWorker.ml).
- *)
+*)
 (*****************************************************************************)
 type ('job, 'result) handle
 

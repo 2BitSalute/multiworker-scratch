@@ -14,19 +14,20 @@
  (wrapped false)
  (modules mem_profile multiThreadedCall multiWorker worker workerController)
  (libraries
-  core_kernel
-  heap_shared_mem
-  logging
-  marshal_tools
+  ;core_kernel
+  ;heap_shared_mem
+  ;logging
+  ;marshal_tools
   procs_bucket
-  procfs
-  relative_path
-  sys_utils
-  utils_exit
-  worker_cancel))
+  ;procfs
+  ;relative_path
+  ;sys_utils
+  ;utils_exit
+  ;worker_cancel
+  ))
 
 (library
  (name procs_entry_point)
  (wrapped false)
  (modules workerControllerEntryPoint)
- (libraries procs_procs folly_stubs))
+ (libraries procs_procs))

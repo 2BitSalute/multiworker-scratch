@@ -1,10 +1,9 @@
 (*
+ * Copyright (c) 2022, Tatiana Racheva
  * Copyright (c) 2015, Facebook, Inc.
- * All rights reserved.
  *
  * This source code is licensed under the MIT license found in the
- * LICENSE file in the "hack" directory of this source tree.
- *
+ * LICENSE file in the root directory of this source tree.
  *)
 
 module Hh_bucket = Bucket
@@ -106,20 +105,20 @@ let multi_threaded_call
         handlers
         ~init:(env, Continue, handlers)
         ~f:(fun (env, decision, handlers) (fd, handler) ->
-          if
-            is_cancel decision
-            || (not @@ List.mem ~equal:Poly.( = ) ready_fds fd)
-          then
-            (env, decision, handlers)
-          else
-            let (env, decision) = handler env in
-            (* Re-raise the exception even if handler have caught and ignored it *)
-            Option.iter !nested_exception ~f:(fun e -> Exception.reraise e);
+            if
+              is_cancel decision
+              || (not @@ List.mem ~equal:Poly.( = ) ready_fds fd)
+            then
+              (env, decision, handlers)
+            else
+              let (env, decision) = handler env in
+              (* Re-raise the exception even if handler have caught and ignored it *)
+              Option.iter !nested_exception ~f:(fun e -> Exception.reraise e);
 
-            (* running a handler could have changed the handlers,
-             * so need to regenerate them based on new environment *)
-            let handlers = interrupt.handlers env in
-            (env, decision, handlers))
+              (* running a handler could have changed the handlers,
+               * so need to regenerate them based on new environment *)
+              let handlers = interrupt.handlers env in
+              (env, decision, handlers))
     in
     let res = (acc, env, handlers) in
     if is_cancel decision then (
@@ -150,21 +149,21 @@ let multi_threaded_call
     | Some (worker :: workers) ->
       (* At least one worker is available... *)
       (match next () with
-      | Hh_bucket.Wait -> collect (worker :: workers) handles acc
-      | Hh_bucket.Done ->
-        (* ... but no more job to be distributed, let's collect results. *)
-        dispatch None handles acc
-      | Hh_bucket.Job bucket ->
-        (* ... send a job to the worker.*)
-        let worker_id = WorkerController.worker_id worker in
-        let handle =
-          WorkerController.call
-            ~call_id
-            worker
-            (fun xl -> job (worker_id, neutral) xl)
-            bucket
-        in
-        dispatch (Some workers) (handle :: handles) acc)
+       | Hh_bucket.Wait -> collect (worker :: workers) handles acc
+       | Hh_bucket.Done ->
+         (* ... but no more job to be distributed, let's collect results. *)
+         dispatch None handles acc
+       | Hh_bucket.Job bucket ->
+         (* ... send a job to the worker.*)
+         let worker_id = WorkerController.worker_id worker in
+         let handle =
+           WorkerController.call
+             ~call_id
+             worker
+             (fun xl -> job (worker_id, neutral) xl)
+             bucket
+         in
+         dispatch (Some workers) (handle :: handles) acc)
   and collect workers handles acc =
     let { WorkerController.readys; waiters; ready_fds } =
       WorkerController.select handles (handler_fds acc)
@@ -178,23 +177,23 @@ let multi_threaded_call
         ~f:
           begin
             fun (acc, failures) h ->
-            try
-              let res = WorkerController.get_result h in
-              (* Results for handles from other calls are cached by get_result
-               * and will be retrieved later, so we ignore them here *)
-              let acc =
-                if is_current h then
-                  let worker_id =
-                    WorkerController.get_worker h |> WorkerController.worker_id
-                  in
-                  merge (worker_id, res) acc
-                else
-                  acc
-              in
-              (acc, failures)
-            with
-            | WorkerController.Worker_failed (_, failure) ->
-              (acc, failure :: failures)
+              try
+                let res = WorkerController.get_result h in
+                (* Results for handles from other calls are cached by get_result
+                 * and will be retrieved later, so we ignore them here *)
+                let acc =
+                  if is_current h then
+                    let worker_id =
+                      WorkerController.get_worker h |> WorkerController.worker_id
+                    in
+                    merge (worker_id, res) acc
+                  else
+                    acc
+                in
+                (acc, failures)
+              with
+              | WorkerController.Worker_failed (_, failure) ->
+                (acc, failure :: failures)
           end
         ~init:(acc, [])
         readys

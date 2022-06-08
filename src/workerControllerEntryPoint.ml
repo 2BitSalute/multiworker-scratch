@@ -1,9 +1,10 @@
 (*
+ * Copyright (c) 2022, Tatiana Racheva
  * Copyright (c) 2021, Facebook, Inc.
  * All rights reserved.
  *
  * This source code is licensed under the MIT license found in the
- * LICENSE file in the "hack" directory of this source tree.
+ * LICENSE file in the root directory of this source tree.
  *
  *)
 
@@ -14,13 +15,11 @@ open WorkerController
 let entry_counter = ref 0
 
 let win32_worker ~restore p =
-  (* Explicitly ensure that Folly is initialized (installs signal handlers) *)
-  Folly.ensure_folly_init ();
+  (* TODO: install signal handlers *)
   win32_worker_main restore (p.entry_state, p.controller_fd)
 
 let unix_worker ~restore { longlived_workers; entry_state; controller_fd } =
-  (* Explicitly ensure that Folly is initialized (installs signal handlers) *)
-  Folly.ensure_folly_init ();
+  (* TODO: install signal handlers *)
   if longlived_workers then
     unix_worker_main_no_clone restore (entry_state, controller_fd)
   else

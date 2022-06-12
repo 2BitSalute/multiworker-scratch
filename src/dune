@@ -10,15 +10,56 @@
  (libraries procs_core_ops))
 
 (library
+ (name procs_sys)
+ (wrapped false)
+ ;  TODO: move priority queue, iSet?
+ (modules
+  daemon
+  exception
+  fork
+  handle
+  intKey
+  iSet
+  pidLog
+  priorityQueue
+  string_utils
+  sys_sig
+  sys_utils
+  timeout
+  timer)
+ (libraries procs_core_ops)
+ (foreign_stubs
+  (language c)
+  (names
+   ;  files
+   ;  gc_profiling
+   ;  getrusage
+   handle_stubs
+   ;  nproc
+   ;  priorities
+   ;  processor_info
+   realpath
+   sysinfo))
+ (preprocess
+  (pps ppx_deriving.std ppx_deriving.enum)))
+
+(library
  (name procs_procs)
  (wrapped false)
- (modules mem_profile multiThreadedCall multiWorker worker workerController)
+ (modules
+  mem_profile
+  multiThreadedCall
+  multiWorker
+  procs_sig
+  worker
+  workerController)
  (libraries
   ;core_kernel
   ;heap_shared_mem
   ;logging
   ;marshal_tools
   procs_bucket
+  procs_sys
   ;procfs
   ;relative_path
   ;sys_utils

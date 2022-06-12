@@ -8,6 +8,7 @@
  *
  *)
 
+(* TODO: move type into bucket_sig.ml *)
 module type BUCKET = sig
   (* The general protocol for a next function is to return either Wait (indicating
      that workers should wait until more elements are added to the workload), or

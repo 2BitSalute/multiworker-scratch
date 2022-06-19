@@ -1,8 +1,3 @@
-module type SHAREDMEM = sig
-  (* TODO: MOVE *)
-  type handle
-end
-
 module type WORKER = sig
   module Daemon: Sys_sig.DAEMON
 
@@ -12,27 +7,26 @@ module type WORKER = sig
   type subprocess_job_status = Subprocess_terminated of Unix.process_status
 
   val win32_worker_main :
-    ('a -> 'b) ->
+    ('a -> unit) ->
     'a * Unix.file_descr option ->
     request Daemon.in_channel * 'c Daemon.out_channel ->
     'd
 
   val unix_worker_main :
-    ('a -> 'b) ->
+    ('a -> unit) ->
     'a * Unix.file_descr option ->
     request Daemon.in_channel * 'c Daemon.out_channel ->
     'd
 
   val unix_worker_main_no_clone :
-    ('a -> 'b) ->
+    ('a -> unit) ->
     'a * Unix.file_descr option ->
     request Daemon.in_channel * 'c Daemon.out_channel ->
     'd
 end
 
 module type WORKERCONTROLLER = sig
-  module Daemon : Sys_sig.DAEMON
-  module SharedMem : SHAREDMEM
+  module SharedMem : SharedMem_sig.SHAREDMEM
   module Worker : WORKER
 
   (*****************************************************************************)
@@ -99,10 +93,10 @@ module type WORKERCONTROLLER = sig
   val mark_free : worker -> unit
 
   (* If the worker isn't prespawned, spawn the worker *)
-  val spawn : worker -> (void, Worker.request) Daemon.handle
+  val spawn : worker -> (void, Worker.request) Worker.Daemon.handle
 
   (* If the worker isn't prespawned, close the worker *)
-  val close : worker -> (void, Worker.request) Daemon.handle -> unit
+  val close : worker -> (void, Worker.request) Worker.Daemon.handle -> unit
 
   type call_wrapper = { wrap: 'x 'b. ('x -> 'b) -> 'x -> 'b }
 
@@ -116,7 +110,7 @@ module type WORKERCONTROLLER = sig
     controller_fd: Unix.file_descr option;
   }
 
-  type 'a entry = ('a worker_params, Worker.request, void) Daemon.entry
+  type 'a entry = ('a worker_params, Worker.request, void) Worker.Daemon.entry
 
   (* Creates a pool of workers. *)
   val make :
@@ -234,4 +228,100 @@ module type MULTITHREADEDCALL = sig
     'c * 'd * 'a list
 
   val on_exception : (Exception.t -> unit) -> unit
+end
+
+module type CALLER = sig
+  module Bucket : Bucket.BUCKET
+  module WorkerController : WORKERCONTROLLER
+
+  type 'a result
+
+  val return : 'a -> 'a result
+
+  val multi_threaded_call :
+    WorkerController.worker list ->
+    (WorkerController.worker_id * 'c -> 'a -> 'b) ->
+    (WorkerController.worker_id * 'b -> 'c -> 'c) ->
+    'c ->
+    'a Bucket.next ->
+    'c result
+end
+
+module type MULTIWORKER = sig
+  module MultiThreadedCall : MULTITHREADEDCALL
+  module SharedMem : SharedMem_sig.SHAREDMEM
+
+  type worker
+
+  (* List of file descriptors that became ready (and triggered interruption),
+   * returns whether current job should be cancelled *)
+  type 'a interrupt_config = 'a MultiThreadedCall.interrupt_config
+
+  val next :
+    ?progress_fn:(total:int -> start:int -> length:int -> unit) ->
+    ?max_size:int ->
+    worker list option ->
+    'a list ->
+    'a list MultiThreadedCall.Bucket.next
+
+  (* Can raise MultiThreadedCall.Coalesced_failures unless in single-threaded mode. *)
+  val call :
+    worker list option ->
+    job:('c -> 'a -> 'b) ->
+    merge:('b -> 'c -> 'c) ->
+    neutral:'c ->
+    next:'a MultiThreadedCall.Bucket.next ->
+    'c
+
+  type call_wrapper = {
+    f:
+      'a 'b 'c.
+        worker list option ->
+      job:('c -> 'a -> 'b) ->
+      merge:('b -> 'c -> 'c) ->
+      neutral:'c ->
+      next:'a MultiThreadedCall.Bucket.next ->
+      'c;
+  }
+
+  val wrapper : call_wrapper
+
+  (* Can raise MultiThreadedCall.Coalesced_failures unless in single-threaded mode. *)
+  val call_with_worker_id :
+    worker list option ->
+    job:(MultiThreadedCall.WorkerController.worker_id * 'c -> 'a -> 'b) ->
+    merge:(MultiThreadedCall.WorkerController.worker_id * 'b -> 'c -> 'c) ->
+    neutral:'c ->
+    next:'a MultiThreadedCall.Bucket.next ->
+    'c
+
+  (** The last element returned, a list of job inputs, are the job inputs which have not been
+      processed fully or at all due to interrupts. *)
+  val call_with_interrupt :
+    ?on_cancelled:
+      ((* [on_cancelled] should be specified if your [next] function ever returns
+          [Hh_bucket.Wait], and it should return the list of all jobs that haven't
+          finished or started yet. *)
+        unit ->
+        'a list) ->
+    worker list option ->
+    job:('c -> 'a -> 'b) ->
+    merge:('b -> 'c -> 'c) ->
+    neutral:'c ->
+    next:'a MultiThreadedCall.Bucket.next ->
+    interrupt:'d interrupt_config ->
+    'c * 'd * 'a list
+
+  (* Creates a pool of workers. *)
+  val make :
+    ?call_wrapper:
+      (* See docs in WorkerController.worker for call_wrapper. *)
+      MultiThreadedCall.WorkerController.call_wrapper ->
+    longlived_workers:bool ->
+    saved_state:'a ->
+    entry:'a MultiThreadedCall.WorkerController.entry ->
+    int ->
+    gc_control:Gc.control ->
+    heap_handle:MultiThreadedCall.WorkerController.SharedMem.handle ->
+    worker list
 end

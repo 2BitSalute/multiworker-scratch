@@ -12,27 +12,36 @@
 (library
  (name procs_sys)
  (wrapped false)
- ;  TODO: move priority queue, iSet?
+ ;  TODO: move priority queue, iSet to a collections library?
  (modules
+  collections_sig
   daemon
   exception
   fork
   handle
+  iMap
   intKey
   iSet
+  hh_logger
+  measure
   pidLog
   priorityQueue
+  sMap
+  stringKey
   string_utils
   sys_sig
   sys_utils
+  telemetry
   timeout
-  timer)
+  timer
+  wrappedMap
+  wrappedMap_sig)
  (libraries procs_core_ops)
  (foreign_stubs
   (language c)
   (names
    ;  files
-   ;  gc_profiling
+   gc_profiling
    ;  getrusage
    handle_stubs
    ;  nproc
@@ -44,9 +53,55 @@
   (pps ppx_deriving.std ppx_deriving.enum)))
 
 (library
+ (name marshal_tools)
+ (wrapped false)
+ (modules marshal_tools marshal_tools_sig)
+ (libraries procs_sys)
+ (preprocess
+  (pps ppx_deriving.std)))
+
+(library
+ (name procs_cancel)
+ (wrapped false)
+ (modules workerCancel)
+ (preprocess
+  (pps ppx_deriving.std))
+ (libraries procs_sys))
+
+(library
+ (name heap_libc)
+ (wrapped false)
+ (modules hh_dummy) ; only necessary to be able to build a .a target
+ (foreign_stubs
+  (language c)
+  (names hh_assert hh_shared))
+ (c_library_flags (:standard))
+ (libraries))
+
+(library
+ (name heap_ident)
+ (wrapped false)
+ (modules ident ident_sig)
+ (libraries procs_core_ops procs_sys))
+
+(library
+ (name heap_shared_mem_hash)
+ (wrapped false)
+ (modules sharedMemHash))
+
+(library
+ (name heap_shared_mem)
+ (wrapped false)
+ (modules prefix sharedMem sharedMem_sig)
+ (preprocess
+  (pps ppx_deriving.std))
+ (libraries procs_core_ops heap_libc procs_cancel procs_sys))
+
+(library
  (name procs_procs)
  (wrapped false)
  (modules
+  exit_status
   mem_profile
   multiThreadedCall
   multiWorker
@@ -54,11 +109,11 @@
   worker
   workerController)
  (libraries
-  ;core_kernel
-  ;heap_shared_mem
+  heap_shared_mem
   ;logging
-  ;marshal_tools
+  marshal_tools
   procs_bucket
+  procs_cancel
   procs_sys
   ;procfs
   ;relative_path
@@ -72,3 +127,15 @@
  (wrapped false)
  (modules workerControllerEntryPoint)
  (libraries procs_procs))
+
+(executable
+ (name demo)
+ (public_name demo)
+ (modules demo demo_setup)
+ (libraries
+  heap_shared_mem
+  procs_entry_point
+  procs_procs
+  procs_sys
+  procs_bucket
+  procs_cancel))

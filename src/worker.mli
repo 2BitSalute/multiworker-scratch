@@ -6,4 +6,16 @@
  * LICENSE file in the root directory of this source tree.
  *)
 
-module MakeWorker (Daemon: Sys_sig.DAEMON) : Procs_sig.WORKER
+module MakeWorker
+    (Core: Core_sig.COREOPS)
+    (Sys_utils: Sys_sig.SYSUTILS)
+    (Daemon: Sys_sig.DAEMON)
+    (Exception: Sys_sig.EXCEPTION)
+    (Fork: Sys_sig.FORK)
+    (Marshal_tools: Marshal_tools_sig.MARSHAL_TOOLS)
+    (Measure: Sys_sig.MEASURE)
+    (SharedMem: SharedMem_sig.SHAREDMEM)
+    (Telemetry: Sys_sig.TELEMETRY)
+    (Timeout: Sys_sig.TIMEOUT)
+    (WorkerCancel: WorkerCancel.WORKERCANCEL)
+  : Procs_sig.WORKER

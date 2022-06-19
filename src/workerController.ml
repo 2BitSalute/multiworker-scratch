@@ -28,15 +28,29 @@
  *
  *****************************************************************************)
 
-module MakeWorkerController
-    (Daemon : Sys_sig.DAEMON)
-    (SharedMem : Procs_sig.SHAREDMEM)
-    (Worker : Procs_sig.WORKER)
-  : Procs_sig.WORKERCONTROLLER = struct
+(* TODO: remove this *)
+open Exit_status
 
-  module Daemon = Daemon
+module MakeWorkerController
+    (Core: Core_sig.COREOPS)
+    (Exception: Sys_sig.EXCEPTION)
+    (Marshal_tools: Marshal_tools_sig.MARSHAL_TOOLS)
+    (Measure: Sys_sig.MEASURE)
+    (SharedMem : SharedMem_sig.SHAREDMEM)
+    (Sys_utils: Sys_sig.SYSUTILS)
+    (Timeout: Sys_sig.TIMEOUT)
+    (Worker : Procs_sig.WORKER)
+    (WorkerCancel: WorkerCancel.WORKERCANCEL)
+  : Procs_sig.WORKERCONTROLLER = struct
+  module Daemon = Worker.Daemon
+  module Exn = Core.Exn
+  module List = Core.List
+  module Option = Core.Option
   module SharedMem = SharedMem
   module Worker = Worker
+
+  (* TODO: no, just no *)
+  open Worker
 
   type process_id = int
 
@@ -190,10 +204,10 @@ module MakeWorkerController
   let close w h = if Option.is_none w.prespawned then Daemon.close h
 
   (* If there is a call_wrapper, apply it and create the Request *)
-  let wrap_request w f x metadata_in =
+  let wrap_request w f x =
     match w.call_wrapper with
-    | Some { wrap } -> Request ((fun { send } -> send (wrap f x)), metadata_in)
-    | None -> Request ((fun { send } -> send (f x)), metadata_in)
+    | Some { wrap } -> Request (fun { send } -> send (wrap f x))
+    | None -> Request (fun { send } -> send (f x))
 
   type 'a entry_state = 'a * Gc.control * SharedMem.handle * int
 
@@ -248,7 +262,7 @@ module MakeWorkerController
       ~entry
       nbr_procs
       ~gc_control
-      ~heap_handle =
+      ~(heap_handle: SharedMem.handle) =
     let setup_controller_fd () =
       if use_prespawned then
         let (parent_fd, child_fd) = Unix.pipe () in
@@ -367,12 +381,12 @@ module MakeWorkerController
     let get_result_with_status_check ?(block_on_waitpid = false) () : b =
       with_exit_status_check ~block_on_waitpid worker_pid (fun () ->
           let data : b = Marshal_tools.from_fd_with_preamble infd in
-          let ({ stats; log_globals } : metadata_out) =
+          let ( stats ) =
             Marshal_tools.from_fd_with_preamble infd
           in
           close w h;
           Measure.merge (Measure.deserialize stats);
-          HackEventLogger.deserialize_globals log_globals;
+          (* HackEventLogger.deserialize_globals log_globals; *)
           data)
     in
     let result () : b =
@@ -416,8 +430,7 @@ module MakeWorkerController
           ())
     in
     let job = { result; infd; worker = w; wait_for_cancel } in
-    let metadata_in = { log_globals = HackEventLogger.serialize_globals () } in
-    let (request : Worker.request) = wrap_request w f x metadata_in in
+    let (request : Worker.request) = wrap_request w f x in
     (* Send the job to the worker. *)
     let () =
       try
@@ -501,7 +514,7 @@ module MakeWorkerController
         Sys_utils.select_non_intr (fds @ additional_fds) [] [] (-1.)
     in
     let additional_ready_fds =
-      List.filter ~f:(List.mem ~equal:Poly.( = ) ready_fds) additional_fds
+      List.filter ~f:(List.mem ~equal:( = ) ready_fds) additional_fds
     in
     List.fold_right
       ~f:(fun d acc ->
@@ -510,7 +523,7 @@ module MakeWorkerController
           | Canceled
           | Failed _ ->
             { acc with readys = d :: acc.readys }
-          | Processing s when List.mem ~equal:Poly.( = ) ready_fds s.infd ->
+          | Processing s when List.mem ~equal:( = ) ready_fds s.infd ->
             { acc with readys = d :: acc.readys }
           | Processing _ -> { acc with waiters = d :: acc.waiters })
       ~init:{ readys = []; waiters = []; ready_fds = additional_ready_fds }

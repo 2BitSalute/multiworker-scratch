@@ -6,5 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  *)
 
-val register :
-  restore:('a -> worker_id:int -> unit) -> 'a WorkerController.entry
+module MakeWorkerControllerEntryPoint
+    (Worker: Procs_sig.WORKER)
+    (WorkerController: Procs_sig.WORKERCONTROLLER) : sig
+  val register :
+    restore:('a -> worker_id:int -> unit) ->
+    ('a WorkerController.worker_params, Worker.request, 'b) Worker.Daemon.entry
+end

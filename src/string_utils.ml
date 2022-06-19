@@ -11,4 +11,11 @@ module String_utils : Sys_sig.STRINGUTILS = struct
     match List.rev lines with
     | "" :: rest -> List.rev rest
     | _ -> lines
+
+
+  let truncate len s =
+    if String.length s <= len then
+      s
+    else
+      String.sub s 0 len
 end

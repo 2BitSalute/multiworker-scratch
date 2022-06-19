@@ -1,5 +1,7 @@
 module MakeUtils
     (Exception: Sys_sig.EXCEPTION) : Sys_sig.UTILS = struct
+  type callstack = Callstack of string [@@deriving show]
+
   let with_context
       ~(enter : unit -> unit) ~(exit : unit -> unit) ~(do_ : unit -> 'a) : 'a =
     enter ();
@@ -12,6 +14,12 @@ module MakeUtils
     in
     exit ();
     result
+
+  let try_finally ~f ~finally =
+    (* TODO: why do I have to ignore pp_callstack? *)
+    ignore pp_callstack;
+    ignore (f, finally);
+    failwith "Not implemented"
 end
 
 external realpath : string -> string option = "hh_realpath"
@@ -22,6 +30,10 @@ module MakeSysUtils
     (Utils: Sys_sig.UTILS)
   : Sys_sig.SYSUTILS = struct
   external pid_of_handle : int -> int = "pid_of_handle"
+
+  external get_gc_time : unit -> float * float = "hh_get_gc_time"
+
+  external start_gc_profiling : unit -> unit = "hh_start_gc_profiling" [@@noalloc]
 
   module List = Core.List
 
@@ -129,7 +141,7 @@ module MakeSysUtils
         | Some paths -> Str.split (Str.regexp_string path_sep) paths
       in
       let path =
-        List.fold_left
+        List.fold
           paths
           ~f:
             begin

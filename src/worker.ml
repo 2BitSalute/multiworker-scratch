@@ -17,13 +17,51 @@
  *
  *****************************************************************************)
 
+(* TODO: remove this *)
+open Exit_status
+
 (* TODO: real *)
-module Marshal_tools = struct
-  let to_fd_with_preamble _ _ = failwith "Not implemented"
+module ProcFS : sig
+  type status = {
+    rss_anon: int;
+    rss_file: int;
+    rss_shmem: int;
+    rss_total: int;
+    rss_hwm: int;
+  }
+
+  val status_for_pid : int -> (status, string) result
+
+  (* val first_cgroup_for_pid : int -> (string, string) result *)
+end = struct
+  type status = {
+    rss_anon: int;
+    rss_file: int;
+    rss_shmem: int;
+    rss_total: int;
+    rss_hwm: int;
+  }
+
+  let status_for_pid _ = Result.Error "Not implemented"
+  (* let first_cgroup_for_pid _ = Result.Error "Not implemented" *)
 end
 
-module MakeWorker (Daemon: Sys_sig.DAEMON) : Procs_sig.WORKER = struct
+module MakeWorker
+    (Core: Core_sig.COREOPS)
+    (Sys_utils: Sys_sig.SYSUTILS)
+    (Daemon: Sys_sig.DAEMON)
+    (Exception: Sys_sig.EXCEPTION)
+    (Fork: Sys_sig.FORK)
+    (Marshal_tools: Marshal_tools_sig.MARSHAL_TOOLS)
+    (Measure: Sys_sig.MEASURE)
+    (SharedMem: SharedMem_sig.SHAREDMEM)
+    (Telemetry: Sys_sig.TELEMETRY)
+    (Timeout: Sys_sig.TIMEOUT)
+    (WorkerCancel: WorkerCancel.WORKERCANCEL)
+  : Procs_sig.WORKER = struct
   module Daemon = Daemon
+  module List = Core.List
+  module Result = Core.Result
 
   type request = Request of (serializer -> unit)
 
@@ -133,16 +171,17 @@ module MakeWorker (Daemon: Sys_sig.DAEMON) : Procs_sig.WORKER = struct
                ^^ "If you are sending closures, double-check to ensure that "
                ^^ "they have not captured large values in their environment.")
               len;
-            (Telemetry.create () |> Telemetry.int_ ~key:"len" ~value:len)
           );
 
           Measure.sample "worker_response_len" (float len);
 
+          (* TODO:keep? *)
           let metadata_out =
-            {
-              stats = Measure.serialize (Measure.pop_global ());
-              log_globals = HackEventLogger.serialize_globals ();
-            }
+            "nothing"
+            (* {
+               stats = Measure.serialize (Measure.pop_global ());
+               log_globals = HackEventLogger.serialize_globals ();
+               } *)
           in
           let _ = Marshal_tools.to_fd_with_preamble outfd metadata_out in
           ())
@@ -154,7 +193,7 @@ module MakeWorker (Daemon: Sys_sig.DAEMON) : Procs_sig.WORKER = struct
         Measure.time "worker_read_request" (fun () ->
             Marshal_tools.from_fd_with_preamble infd)
       in
-      let (Request (do_process, { log_globals })) = request in
+      let (Request do_process) = request in
       let tm = Unix.times () in
       let gc = Gc.quick_stat () in
       Sys_utils.start_gc_profiling ();
@@ -167,8 +206,7 @@ module MakeWorker (Daemon: Sys_sig.DAEMON) : Procs_sig.WORKER = struct
       start_major_collections := gc.Gc.major_collections;
       start_wall_time := Unix.gettimeofday ();
       start_proc_fs_status :=
-        ProcFS.status_for_pid (Unix.getpid ()) |> Core_kernel.Result.ok;
-      HackEventLogger.deserialize_globals log_globals;
+        ProcFS.status_for_pid (Unix.getpid ()) |> Result.ok;
       Mem_profile.start ();
       do_process { send = send_result };
       `Success
@@ -213,13 +251,13 @@ module MakeWorker (Daemon: Sys_sig.DAEMON) : Procs_sig.WORKER = struct
       Hh_logger.log
         "WORKER_EXCEPTION %s"
         (Exception.to_string e |> Exception.clean_stack);
-      EventLogger.log_if_initialized (fun () ->
+      (* EventLogger.log_if_initialized (fun () ->
           HackEventLogger.worker_exception e);
-      (* What exit code should we emit for an uncaught exception?
+         (* What exit code should we emit for an uncaught exception?
          The ocaml runtime emits exit code 2 for uncaught exceptions.
          We should really pick our own different code here, but (history) we don't.
          How can we convey exit code 2? By unfortunate accident, Exit_status.Type_error
-         gets turned into "2". So that's how we're going to return exit code 2. Yuck. *)
+         gets turned into "2". So that's how we're going to return exit code 2. Yuck. *) *)
       `Error Exit_status.Type_error
 
   (*****************************************************************************

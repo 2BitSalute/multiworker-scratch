@@ -10,6 +10,5 @@ module MakeMultiThreadedCall
     (Bucket : Bucket.BUCKET)
     (Core : Core_sig.COREOPS)
     (Exception : Sys_sig.EXCEPTION)
-    (SharedMem : SharedMem_sig.SHAREDMEM)
     (WorkerController : Procs_sig.WORKERCONTROLLER)
   : Procs_sig.MULTITHREADEDCALL

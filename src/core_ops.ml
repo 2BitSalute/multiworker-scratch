@@ -225,7 +225,7 @@ module CoreOps : Core_sig.COREOPS = struct
       Float.compare x y = 0
 
     let ( <= ) x y =
-      Float.compare x y < 0
+      Float.compare x y <= 0
 
     let compare = Float.compare
     let equal = Float.equal

@@ -7,6 +7,17 @@
  *
  */
 
+/*
+TODO: on line
+    hcounter_filled = (size_t *)(mem + 12 * CACHE_LINE_SIZE);
+
+    Don't know yet if it's a problem, but get warnings like this:
+        hh_shared.c:1038:21: warning: incompatible pointer types assigning to 'uint64_t *' (aka 'unsigned long long *') from 'size_t *' (aka 'unsigned long *') [-Wincompatible-pointer-types]
+        hcounter_filled = (size_t *)(mem + 12 * CACHE_LINE_SIZE);
+*/
+#pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
+#pragma GCC diagnostic ignored "-Wint-conversion"
+
 #include "hh_shared.h"
 /* For some reason this header file is not on path in OSS builds.
  * But we only lose the ability to trim the OCaml heap after a GC
@@ -244,17 +255,17 @@ static int win32_getpagesize(void)
 /* API to shmffi */
 /*****************************************************************************/
 
-extern void shmffi_init(void *mmap_address, size_t file_size);
-extern void shmffi_attach(void *mmap_address, size_t file_size);
-extern value shmffi_add(uint64_t hash, value data);
-extern value shmffi_mem(uint64_t hash);
-extern value shmffi_get_and_deserialize(uint64_t hash);
-extern value shmffi_mem_status(uint64_t hash);
-extern value shmffi_get_size(uint64_t hash);
-extern void shmffi_move(uint64_t hash1, uint64_t hash2);
-extern value shmffi_remove(uint64_t hash);
-extern value shmffi_allocated_bytes();
-extern value shmffi_num_entries();
+// extern void shmffi_init(void *mmap_address, size_t file_size);
+// extern void shmffi_attach(void *mmap_address, size_t file_size);
+// extern value shmffi_add(uint64_t hash, value data);
+// extern value shmffi_mem(uint64_t hash);
+// extern value shmffi_get_and_deserialize(uint64_t hash);
+// extern value shmffi_mem_status(uint64_t hash);
+// extern value shmffi_get_size(uint64_t hash);
+// extern void shmffi_move(uint64_t hash1, uint64_t hash2);
+// extern value shmffi_remove(uint64_t hash);
+// extern value shmffi_allocated_bytes();
+// extern value shmffi_num_entries();
 
 /*****************************************************************************/
 /* Config settings (essentially constants, so they don't need to live in shared
@@ -328,7 +339,9 @@ typedef struct
 static const uint64_t MAGIC_CONSTANT = 0xfacefacefaceb000ull;
 
 /* The VCS identifier (typically a git hash) of the build */
-extern const char *const BuildInfo_kRevision;
+// extern
+// TODO: do I want SQLite at all? Shame for shmffi
+const char *const BuildInfo_kRevision = 123;
 
 /*****************************************************************************/
 /* Types */
@@ -588,7 +601,7 @@ CAMLprim value hh_used_heap_size(void)
 {
     if (shm_use_sharded_hashtbl)
     {
-        return shmffi_allocated_bytes();
+        // return shmffi_allocated_bytes();
     }
     return Val_long(used_heap_size());
 }
@@ -623,9 +636,9 @@ CAMLprim value hh_hash_used_slots(void)
     connector = caml_alloc_tuple(2);
     if (shm_use_sharded_hashtbl)
     {
-        num_entries = shmffi_num_entries();
-        Store_field(connector, 0, num_entries);
-        Store_field(connector, 1, num_entries);
+        // num_entries = shmffi_num_entries();
+        // Store_field(connector, 0, num_entries);
+        // Store_field(connector, 1, num_entries);
     }
     else
     {
@@ -644,7 +657,7 @@ CAMLprim value hh_hash_slots(void)
         // In the sharded hash table implementation, we dynamically resize
         // the tables. As such, this doesn't really make sense. Return the
         // number of entries for now.
-        CAMLreturn(shmffi_num_entries());
+        // CAMLreturn(shmffi_num_entries());
     }
 
     CAMLreturn(Val_long(hashtbl_size));
@@ -1204,10 +1217,10 @@ CAMLprim value hh_shared_init(
 
     if (shm_use_sharded_hashtbl)
     {
-        assert(memfd_shmffi >= 0);
-        assert(SHARED_MEM_INIT + shared_mem_size <= SHARDED_HASHTBL_MEM_ADDR);
-        char *mem_addr = memfd_map(memfd_shmffi, SHARDED_HASHTBL_MEM_ADDR, SHARDED_HASHTBL_MEM_SIZE);
-        shmffi_init(mem_addr, SHARDED_HASHTBL_MEM_SIZE);
+        // assert(memfd_shmffi >= 0);
+        // assert(SHARED_MEM_INIT + shared_mem_size <= SHARDED_HASHTBL_MEM_ADDR);
+        // char *mem_addr = memfd_map(memfd_shmffi, SHARDED_HASHTBL_MEM_ADDR, SHARDED_HASHTBL_MEM_SIZE);
+        // shmffi_init(mem_addr, SHARDED_HASHTBL_MEM_SIZE);
     }
 
     // Keeping the pids around to make asserts.
@@ -1276,9 +1289,9 @@ value hh_connect(value connector, value worker_id_val)
 
     if (shm_use_sharded_hashtbl)
     {
-        assert(memfd_shmffi >= 0);
-        char *mem_addr = memfd_map(memfd_shmffi, SHARDED_HASHTBL_MEM_ADDR, SHARDED_HASHTBL_MEM_SIZE);
-        shmffi_attach(mem_addr, SHARDED_HASHTBL_MEM_SIZE);
+        // assert(memfd_shmffi >= 0);
+        // char *mem_addr = memfd_map(memfd_shmffi, SHARDED_HASHTBL_MEM_ADDR, SHARDED_HASHTBL_MEM_SIZE);
+        // shmffi_attach(mem_addr, SHARDED_HASHTBL_MEM_SIZE);
     }
 
     CAMLreturn(Val_unit);
@@ -2234,7 +2247,7 @@ value hh_add(value key, value data)
     uint64_t hash = get_hash(key);
     if (shm_use_sharded_hashtbl != 0)
     {
-        CAMLreturn(shmffi_add(hash, data));
+        // CAMLreturn(shmffi_add(hash, data));
     }
     check_should_exit();
     unsigned int slot = hash & (hashtbl_size - 1);
@@ -2497,7 +2510,7 @@ value hh_mem(value key)
     CAMLparam1(key);
     if (shm_use_sharded_hashtbl != 0)
     {
-        CAMLreturn(shmffi_mem(get_hash(key)));
+        // CAMLreturn(shmffi_mem(get_hash(key)));
     }
     CAMLreturn(Val_bool(hh_mem_inner(key) == 1));
 }
@@ -2560,7 +2573,7 @@ CAMLprim value hh_get_and_deserialize(value key)
     CAMLlocal2(deserialized_value, result);
     if (shm_use_sharded_hashtbl != 0)
     {
-        CAMLreturn(shmffi_get_and_deserialize(get_hash(key)));
+        // CAMLreturn(shmffi_get_and_deserialize(get_hash(key)));
     }
 
     unsigned int slot = find_slot(key);
@@ -2629,7 +2642,7 @@ CAMLprim value hh_get_size(value key)
     CAMLparam1(key);
     if (shm_use_sharded_hashtbl != 0)
     {
-        CAMLreturn(shmffi_get_size(get_hash(key)));
+        // CAMLreturn(shmffi_get_size(get_hash(key)));
     }
 
     unsigned int slot = find_slot(key);
@@ -2648,8 +2661,8 @@ void hh_move(value key1, value key2)
 {
     if (shm_use_sharded_hashtbl != 0)
     {
-        shmffi_move(get_hash(key1), get_hash(key2));
-        return;
+        // shmffi_move(get_hash(key1), get_hash(key2));
+        // return;
     }
 
     unsigned int slot1 = find_slot(key1);
@@ -2681,7 +2694,7 @@ CAMLprim value hh_remove(value key)
     CAMLparam1(key);
     if (shm_use_sharded_hashtbl != 0)
     {
-        CAMLreturn(shmffi_remove(get_hash(key)));
+        // CAMLreturn(shmffi_remove(get_hash(key)));
     }
 
     unsigned int slot = find_slot(key);

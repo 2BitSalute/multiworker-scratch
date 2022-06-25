@@ -10,6 +10,7 @@ module Exit_status = struct
     | Sql_misuse
     | Sql_assertion_failure
     | Type_error
+    | Worker_not_found_exception
 
   let exit_code _code =
     (* TODO: convert status to int *)

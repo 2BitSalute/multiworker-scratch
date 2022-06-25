@@ -6,6 +6,12 @@
  * LICENSE file in the root directory of this source tree.
  *)
 
+open Demo_setup
+
+module Daemon = MultiWorker.MultiThreadedCall.WorkerController.Worker.Daemon
+module SharedMem = MultiWorker.MultiThreadedCall.WorkerController.SharedMem
+module WorkerController = MultiWorker.MultiThreadedCall.WorkerController
+
 module Global_state = struct
   type state = {
     dummy: int
@@ -19,7 +25,7 @@ module Global_state = struct
 
   let restore
       ({
-        dummy
+        dummy = _
       } : state)
       ~(worker_id : int) : unit =
     Printf.printf "%s - Hello from restore" (worker_id_str ~worker_id)
@@ -38,41 +44,23 @@ let entry =
 let catch_and_classify_exceptions : 'x 'b. ('x -> 'b) -> 'x -> 'b =
   fun f x ->
   try f x with
-  | Decl_class.Decl_heap_elems_bug -> Exit.exit Exit_status.Decl_heap_elems_bug
-  | File_provider.File_provider_stale ->
-    Exit.exit Exit_status.File_provider_stale
-  | Decl_defs.Decl_not_found x ->
-    Hh_logger.log "Decl_not_found %s" x;
-    Exit.exit Exit_status.Decl_not_found
-  | Not_found_s _
-  | Caml.Not_found ->
+  | Not_found ->
     Exit.exit Exit_status.Worker_not_found_exception
 
-let init_state
-    ~(root : Path.t)
-    ~(popt : ParserOptions.t)
-    ~(tcopt : TypecheckerOptions.t)
-    ~(deps_mode : Typing_deps_mode.t) :
-  Provider_context.t * Batch_global_state.batch_state =
-  Relative_path.(set_path_prefix Root root);
-  make_tmp_dir ();
-  make_hhi_dir ();
-  Typing_global_inference.set_path ();
-  let ctx =
-    Provider_context.empty_for_tool
-      ~popt
-      ~tcopt
-      ~backend:Provider_backend.Shared_memory
-      ~deps_mode
-  in
-  let batch_state = Batch_global_state.save ~trace:true in
-  (ctx, batch_state)
+let init_state () = Global_state.save ~trace:true
 
 let init () =
-  let nbr_procs = Sys_utils.nbr_procs in
-  let heap_handle = SharedMem.init ~num_workers:nbr_procs shmem_config in
-  let gc_control = Core_kernel.Gc.get () in
-  let (ctx, state) = init_state ~root ~popt ~tcopt ~deps_mode in
+  let nbr_procs =
+    (* MacBook Air 2017 *)
+    2
+    (* Sys_utils.nbr_procs *)
+  in
+  (* 2 is too few. I need to buy a new MacBook Air *)
+  let num_workers = nbr_procs in
+
+  let heap_handle = SharedMem.init ~num_workers SharedMem.default_config in
+  let gc_control = Gc.get () in
+  let state = init_state () in
   let workers =
     MultiWorker.make
       ~call_wrapper:{ WorkerController.wrap = catch_and_classify_exceptions }
@@ -85,6 +73,53 @@ let init () =
   in
   workers
 
+let next_list =
+  let rec aux acc n =
+    if n >= 0 then
+      aux (n :: acc) (n - 1)
+    else
+      acc
+  in
+  aux [] 200000
+
 let () =
-  let _workers = init () in
+  (* Required to prevent the spawned subprocesses from executing this function again.
+     If you forget to check entry point here, the program is going to enter an infinite
+     loop, spawning more and more subprocesses until the OS process limit is hit.
+     At that point, you will begin seeing failures having to do with being unable to load
+     libraries (e.g., zstdlib), or some other unrelated-looking errors.
+     This MatLab discussion contains a clue:
+     https://www.mathworks.com/matlabcentral/answers/341979-matlab-r2017a-9-2-0-538062-crashes-when-calling-functions-from-the-parallel-computing-toolbox-mac#answer_268898
+     "The error may be a result of the ulimit settings being too low."
+
+     I can't tell you how many times I got caught by this.
+     It's a design flaw in the approach.
+  *)
+  Daemon.check_entry_point ();
+
+  let workers = init () in
+  (* let workers = Some () in *)
+  Printf.printf "Num workers: %d\n" (List.length workers);
+  let workers = None in
+  let job (c: int list) (a: int list) =
+    (* Is c the accumulator (seems to be inited by neutral), and a the input? *)
+    ignore (c, a);
+    Printf.printf "Job! %d %d\n" (List.length c) (List.hd a);
+    List.fold_left (fun acc el -> acc + el) 0 a;
+  in
+  let merge (b: int) (acc: int list) : int list =
+    ignore b;
+    Printf.printf "Merge: %d %d\n" b (List.length acc);
+    b :: acc
+  in
+
+  let (c: int list) = MultiWorker.call
+      workers
+      ~job
+      ~neutral:[1; 2; 3; 4]
+      ~merge
+      ~next:(MultiWorker.next workers next_list)
+  in
+  ignore c;
+  ignore (workers, job, merge);
   ()

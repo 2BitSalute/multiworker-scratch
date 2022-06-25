@@ -7,6 +7,7 @@
  *)
 
 module MakeWorkerControllerEntryPoint
+    (* TODO: remove *)
     (Worker: Procs_sig.WORKER)
     (WorkerController: Procs_sig.WORKERCONTROLLER) : sig
   val register :

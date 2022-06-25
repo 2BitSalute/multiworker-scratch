@@ -43,14 +43,22 @@ module SharedMem : SharedMem_sig.SHAREDMEM = struct
     let gig = 1024 * 1024 * 1024 in
     {
       global_size = gig;
-      heap_size = 20 * gig;
-      dep_table_pow = 17;
+      heap_size =
+        (* 20 * gig; *)
+        2 * gig;
+      dep_table_pow =
+        5;
+      (* 17; *)
       (* 1 << 17 *)
-      hash_table_pow = 18;
+      hash_table_pow =
+        5;
+      (* 18; *)
       (* 1 << 18 *)
       shm_dirs = [GlobalConfig.shm_dir; GlobalConfig.tmp_dir];
       shm_use_sharded_hashtbl = false;
-      shm_min_avail = gig / 2;
+      shm_min_avail =
+        (* gig / 2; *)
+        gig / 20;
       (* Half a gig by default *)
       log_level = 0;
       sample_rate = 0.0;
@@ -299,20 +307,14 @@ module MakeSMTelemetry
   let get_telemetry_list = ref []
 
   let get_telemetry () : Telemetry.t =
-    (* This function gets called by compute_tast, even in places which
-       deliberately don't initialize shared memory. In these places, no-op,
-       since otherwise reading from hh_log_level would segfault. *)
-    if not !ref_has_done_init then
-      Telemetry.create ()
-    else
-      let start_time = Unix.gettimeofday () in
-      let telemetry =
-        List.fold
-          !get_telemetry_list
-          ~init:(Telemetry.create ())
-          ~f:(fun acc get_telemetry -> get_telemetry acc)
-      in
-      telemetry |> Telemetry.duration ~start_time
+    let start_time = Unix.gettimeofday () in
+    let telemetry =
+      List.fold
+        !get_telemetry_list
+        ~init:(Telemetry.create ())
+        ~f:(fun acc get_telemetry -> get_telemetry acc)
+    in
+    telemetry |> Telemetry.duration ~start_time
 
   external heap_size : unit -> int = "hh_used_heap_size" [@@noalloc]
 

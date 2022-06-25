@@ -7,7 +7,7 @@
  *)
 
 module MakeMeasure
-    (SMap: Collections_sig.MAP with type key = string)
     (Core: Core_sig.COREOPS)
+    (SMap: Collections_sig.MAP with type key = string)
     (Telemetry: Sys_sig.TELEMETRY)
   : Sys_sig.MEASURE

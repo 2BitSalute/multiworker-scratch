@@ -29,7 +29,7 @@ module MakeMarshalTools
     (Exception : Sys_sig.EXCEPTION)
     (Timeout: Sys_sig.TIMEOUT)
     (Utils : Sys_sig.UTILS)
-    (WriterReader : Marshal_tools_sig.WRITER_READER)
+  (* (WriterReader : Marshal_tools_sig.WRITER_READER) *)
   : Marshal_tools_sig.MARSHAL_TOOLS = struct
 
   module Exception = Exception

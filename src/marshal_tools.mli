@@ -12,5 +12,10 @@ module MakeMarshalTools
     (Exception : Sys_sig.EXCEPTION)
     (Timeout: Sys_sig.TIMEOUT)
     (Utils : Sys_sig.UTILS)
-    (WriterReader : Marshal_tools_sig.WRITER_READER)
+  (* (WriterReader : Marshal_tools_sig.WRITER_READER) *)
   : Marshal_tools_sig.MARSHAL_TOOLS
+
+(* module type REGULAR_WRITER_READER =
+   Marshal_tools_sig.WRITER_READER with type 'a result = 'a and type fd = Unix.file_descr
+
+   module RegularWriterReader : REGULAR_WRITER_READER *)

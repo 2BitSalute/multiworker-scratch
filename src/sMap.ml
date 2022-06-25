@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  *)
 
-module MakeSMap (Core: Core_sig.COREOPS) : Collections_sig.MAP = struct
+module MakeSMap (Core: Core_sig.COREOPS) : Collections_sig.MAP with type key = string = struct
   include WrappedMap.Make (Core) (StringKey)
 
   let pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit =

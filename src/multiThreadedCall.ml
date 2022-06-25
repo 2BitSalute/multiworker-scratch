@@ -10,7 +10,7 @@ module MakeMultiThreadedCall
     (Bucket : Bucket.BUCKET)
     (Core: Core_sig.COREOPS)
     (Exception : Sys_sig.EXCEPTION)
-    (SharedMem : SharedMem_sig.SHAREDMEM)
+    (* (SharedMem : SharedMem_sig.SHAREDMEM) *)
     (WorkerController : Procs_sig.WORKERCONTROLLER)
   : Procs_sig.MULTITHREADEDCALL = struct
   module Bucket = Bucket
@@ -18,6 +18,7 @@ module MakeMultiThreadedCall
   module List = Core.List
   module Option = Core.Option
   module String = Core.String
+  module SharedMem = WorkerController.SharedMem
   module WorkerController = WorkerController
 
   exception Coalesced_failures of WorkerController.worker_failure list

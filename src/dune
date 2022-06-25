@@ -19,6 +19,7 @@
   exception
   fork
   handle
+  hh_json
   iMap
   intKey
   iSet
@@ -36,7 +37,7 @@
   timer
   wrappedMap
   wrappedMap_sig)
- (libraries procs_core_ops)
+ (libraries procs_core_ops str unix)
  (foreign_stubs
   (language c)
   (names
@@ -74,9 +75,11 @@
  (modules hh_dummy) ; only necessary to be able to build a .a target
  (foreign_stubs
   (language c)
-  (names hh_assert hh_shared))
- (c_library_flags (:standard))
- (libraries))
+  (names
+   hh_assert
+   ; Requires lz4 to be installed, e.g., `brew install lz4`
+   hh_shared))
+ (c_library_flags (:standard)))
 
 (library
  (name heap_ident)
@@ -138,4 +141,7 @@
   procs_procs
   procs_sys
   procs_bucket
-  procs_cancel))
+  procs_cancel
+  sqlite3
+  lz4
+  zstd))

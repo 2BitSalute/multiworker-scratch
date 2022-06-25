@@ -15,11 +15,20 @@ module MakeUtils
     exit ();
     result
 
-  let try_finally ~f ~finally =
+  let try_finally ~f ~(finally : unit -> unit) =
+    let res =
+      try f () with
+      | exn ->
+        let e = Exception.wrap exn in
+        finally ();
+        Exception.reraise e
+    in
+    finally ();
+    res
+
+  let () =
     (* TODO: why do I have to ignore pp_callstack? *)
     ignore pp_callstack;
-    ignore (f, finally);
-    failwith "Not implemented"
 end
 
 external realpath : string -> string option = "hh_realpath"

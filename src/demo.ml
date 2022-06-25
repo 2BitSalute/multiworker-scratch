@@ -56,7 +56,7 @@ let init () =
     (* Sys_utils.nbr_procs *)
   in
   (* 2 is too few. I need to buy a new MacBook Air *)
-  let num_workers = nbr_procs in
+  let num_workers = nbr_procs * 5 in
 
   let heap_handle = SharedMem.init ~num_workers SharedMem.default_config in
   let gc_control = Gc.get () in
@@ -98,9 +98,7 @@ let () =
   Daemon.check_entry_point ();
 
   let workers = init () in
-  (* let workers = Some () in *)
-  Printf.printf "Num workers: %d\n" (List.length workers);
-  let workers = None in
+  let workers = Some workers in
   let job (c: int list) (a: int list) =
     (* Is c the accumulator (seems to be inited by neutral), and a the input? *)
     ignore (c, a);

@@ -130,8 +130,8 @@ module CoreOps : Core_sig.COREOPS = struct
 
     let is_none value =
       match value with
-      | Some _ -> true
-      | None -> false
+      | Some _ -> false
+      | None -> true
 
     let is_some value = not (is_none value)
 

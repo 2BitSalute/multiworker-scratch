@@ -53,6 +53,8 @@ module type WORKERCONTROLLER = sig
    * We should never be doing that, and this is an assertion error. *)
   exception Worker_busy
 
+  exception Worker_force_quit
+
   val failure_to_string : worker_failure -> string
 
   type send_job_failure =
@@ -81,16 +83,10 @@ module type WORKERCONTROLLER = sig
   (* Has the worker been force quit *)
   val is_force_quit : worker -> bool
 
-  (* Mark the worker as busy. Throw if it is already busy *)
-  val mark_busy : worker -> unit
-
   (* If the worker is busy, what is it doing. Note that calling this is not
    * type safe: 'a and 'b are free type variables, and they depend on what is the
    * job being executed by worker. *)
   val get_handle_UNSAFE : worker -> ('a, 'b) handle option
-
-  (* Mark the worker as free *)
-  val mark_free : worker -> unit
 
   (* If the worker isn't prespawned, spawn the worker *)
   val spawn : worker -> (void, Worker.request) Worker.Daemon.handle

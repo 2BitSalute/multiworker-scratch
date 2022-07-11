@@ -51,6 +51,7 @@ end
 
 module type OUTCHANNEL = sig
   type t = out_channel
+  val open_for_append : string -> t
   val create : string -> t
   val close : t -> unit
 end

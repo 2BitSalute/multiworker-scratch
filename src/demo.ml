@@ -28,7 +28,10 @@ module Global_state = struct
         dummy = _
       } : state)
       ~(worker_id : int) : unit =
-    Printf.printf "%s - Hello from restore" (worker_id_str ~worker_id)
+    PidLog.log
+      (Printf.sprintf
+         "%s - Hello from restore"
+         (worker_id_str ~worker_id))
 
   let save ~(trace : bool) : state =
     ignore trace;
@@ -95,19 +98,21 @@ let () =
      I can't tell you how many times I got caught by this.
      It's a design flaw in the approach.
   *)
+  (* PidLog.enable (); *)
   Daemon.check_entry_point ();
+  Exception.record_backtrace true;
 
   let workers = init () in
   let workers = Some workers in
   let job (c: int list) (a: int list) =
     (* Is c the accumulator (seems to be inited by neutral), and a the input? *)
     ignore (c, a);
-    Printf.printf "Job! %d %d\n" (List.length c) (List.hd a);
+    PidLog.log (Printf.sprintf "Job! %d %d\n" (List.length c) (List.hd a));
     List.fold_left (fun acc el -> acc + el) 0 a;
   in
   let merge (b: int) (acc: int list) : int list =
     ignore b;
-    Printf.printf "Merge: %d %d\n" b (List.length acc);
+    PidLog.log (Printf.sprintf "Merge: %d %d\n" b (List.length acc));
     b :: acc
   in
 
@@ -118,6 +123,5 @@ let () =
       ~merge
       ~next:(MultiWorker.next workers next_list)
   in
-  ignore c;
-  ignore (workers, job, merge);
-  ()
+
+  Printf.printf "*** DONE: %d ***\n\n%!" (List.length c)

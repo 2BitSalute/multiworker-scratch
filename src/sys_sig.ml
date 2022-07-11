@@ -246,7 +246,8 @@ module type SYSUTILS = sig
 end
 
 module type PIDLOG = sig
-  val log : ?reason:string -> ?no_fail:bool -> int -> unit
+  val enable : unit -> unit
+  val log : ?pid:int -> string -> unit
   val close : unit -> unit
 end
 
@@ -279,11 +280,11 @@ module type EXCEPTION = sig
   val get_ctor_string : t -> string
 
   val get_backtrace_string : t -> string
-(*
-     val get_current_callstack_string : int -> string
 
-     val record_backtrace : bool -> unit
-*)
+  val get_current_callstack_string : int -> string
+
+  val record_backtrace : bool -> unit
+
   val clean_stack : string -> string
 end
 

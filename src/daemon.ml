@@ -264,7 +264,7 @@ module MakeDaemon
     if stdout <> Unix.stdout then close_if_open stdout;
     if stderr <> Unix.stderr && stderr <> stdout then close_if_open stderr;
 
-    PidLog.log ~reason:(Entry.name_of_entry entry) ~no_fail:true pid;
+    PidLog.log ~pid (Entry.name_of_entry entry);
     { channels = (Timeout.in_channel_of_descr parent_in, Unix.out_channel_of_descr parent_out); pid }
 
   (* for testing code *)

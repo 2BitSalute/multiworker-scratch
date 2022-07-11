@@ -54,6 +54,7 @@ module MakeWorker
     (Fork: Sys_sig.FORK)
     (Marshal_tools: Marshal_tools_sig.MARSHAL_TOOLS)
     (Measure: Sys_sig.MEASURE)
+    (PidLog: Sys_sig.PIDLOG)
     (SharedMem: SharedMem_sig.SHAREDMEM)
     (Telemetry: Sys_sig.TELEMETRY)
     (Timeout: Sys_sig.TIMEOUT)
@@ -175,13 +176,8 @@ module MakeWorker
 
           Measure.sample "worker_response_len" (float len);
 
-          (* TODO:keep? *)
           let metadata_out =
-            "nothing"
-            (* {
-               stats = Measure.serialize (Measure.pop_global ());
-               log_globals = HackEventLogger.serialize_globals ();
-               } *)
+            Measure.serialize (Measure.pop_global ())
           in
           let _ = Marshal_tools.to_fd_with_preamble outfd metadata_out in
           ())
@@ -189,10 +185,12 @@ module MakeWorker
 
     try
       Measure.push_global ();
+      PidLog.log "Before getting request\n";
       let request : request =
         Measure.time "worker_read_request" (fun () ->
             Marshal_tools.from_fd_with_preamble infd)
       in
+      PidLog.log "After getting request\n";
       let (Request do_process) = request in
       let tm = Unix.times () in
       let gc = Gc.quick_stat () in
@@ -356,23 +354,28 @@ module MakeWorker
          | `Controller_has_died -> exit controller_has_died_code)
       | pid ->
         (* Wait for the clone process termination... *)
+        PidLog.log "Wait for the clone process termination...";
         let status = snd (Sys_utils.waitpid_non_intr [] pid) in
+        PidLog.log (Printf.sprintf "Clone process %d terminated" pid);
         let () = maybe_send_status_to_controller controller_fd status in
         (match status with
-         | Unix.WEXITED 0 -> ()
+         | Unix.WEXITED 0 ->
+           PidLog.log (Printf.sprintf "Clone %d exited successfully" pid);
+           ()
          | Unix.WEXITED code when code = controller_has_died_code ->
            (* The controller has died, we can stop working *)
+           PidLog.log "The controller has died, we can stop working";
            exit 0
          | Unix.WEXITED code ->
-           Printf.printf "Worker exited (code: %d)\n" code;
+           PidLog.log (Printf.sprintf "Worker exited (code: %d)\n" code);
            Stdlib.flush stdout;
            Stdlib.exit code
          | Unix.WSIGNALED x ->
            let sig_str = PrintSignal.string_of_signal x in
-           Printf.printf "Worker interrupted with signal: %s\n" sig_str;
+           PidLog.log (Printf.sprintf "Worker interrupted with signal: %s\n" sig_str);
            exit 2
          | Unix.WSTOPPED x ->
-           Printf.printf "Worker stopped with signal: %d\n" x;
+           PidLog.log (Printf.sprintf "Worker stopped with signal: %d\n" x);
            exit 3)
     done;
     assert false

@@ -11,32 +11,18 @@ module MakePidLog (Core: Core_sig.COREOPS) (Sys_utils: Sys_sig.SYSUTILS) : Sys_s
   module Out_channel = Core.Out_channel
   module Option = Core.Option
 
+  let enabled = ref false
+
   let log_oc = ref None
 
-  let enabled = ref true
+  let enable () = enabled := true
 
-  (* let disable () = enabled := false *)
-
-  (* let init pids_file =
-     assert (Option.is_none !log_oc);
-     Sys_utils.with_umask 0o111 (fun () ->
+  let init pids_file =
+    Sys_utils.with_umask 0o111 (fun () ->
         Sys_utils.mkdir_no_fail (Filename.dirname pids_file);
-        let oc = Out_channel.create pids_file in
+        let oc = Out_channel.open_for_append pids_file in
         log_oc := Some oc;
-        Unix.(set_close_on_exec (descr_of_out_channel oc))) *)
-
-  let log ?reason ?(no_fail = false) pid =
-    if !enabled then
-      let pid = Sys_utils.pid_of_handle pid in
-      let reason =
-        match reason with
-        | None -> "unknown"
-        | Some s -> s
-      in
-      match !log_oc with
-      | None when no_fail -> ()
-      | None -> failwith "Can't write pid to uninitialized pids log"
-      | Some oc -> Printf.fprintf oc "%d\t%s\n%!" pid reason
+        Unix.(set_close_on_exec (descr_of_out_channel oc)))
 
   (* exception FailedToGetPids *)
 
@@ -68,4 +54,24 @@ module MakePidLog (Core: Core_sig.COREOPS) (Sys_utils: Sys_sig.SYSUTILS) : Sys_s
   let close () =
     Option.iter !log_oc ~f:Out_channel.close;
     log_oc := None
+
+  let rec log ~pid reason =
+    let pid = match pid with
+      | -1 -> Unix.getpid ()
+      | _ -> pid
+    in
+    let pid = Sys_utils.pid_of_handle pid in
+    match !log_oc with
+    | None ->
+      init "pids.log";
+      log ~pid reason;
+    | Some oc ->
+      try
+        Printf.fprintf oc "%d\t%s\n%!" pid reason;
+        close ()
+      with Sys_error _ ->
+        Printf.printf "SYS_ERROR---------"
+
+  let log ?(pid = (-1)) reason =
+    if !enabled then log ~pid reason
 end

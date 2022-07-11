@@ -14,6 +14,7 @@ module MakeWorker
     (Fork: Sys_sig.FORK)
     (Marshal_tools: Marshal_tools_sig.MARSHAL_TOOLS)
     (Measure: Sys_sig.MEASURE)
+    (PidLog: Sys_sig.PIDLOG)
     (SharedMem: SharedMem_sig.SHAREDMEM)
     (Telemetry: Sys_sig.TELEMETRY)
     (Timeout: Sys_sig.TIMEOUT)

@@ -66,6 +66,8 @@ module MakeWorkerController
 
   exception Worker_busy
 
+  exception Worker_force_quit
+
   type send_job_failure =
     | Worker_already_exited of Unix.process_status
     | Other_send_job_failure of exn
@@ -133,12 +135,7 @@ module MakeWorkerController
      * controller. On Windows, it doesn't send anything, so don't try to read from
      * it (it should be set to None). *)
     controller_fd: Unix.file_descr option;
-    (* Sanity check: is the worker still available ? *)
-    mutable is_force_quit: bool;
-    (* Sanity check: is the worker currently busy ? *)
-    mutable busy: bool;
-    (* If the worker is currently busy, handle of the job it's execuing *)
-    mutable handle: 'a 'b. ('a, 'b) handle option;
+    mutable state: 'a 'b. ('a, 'b) state;
     kind: kind;
   }
 
@@ -155,6 +152,15 @@ module MakeWorkerController
    *
    *****************************************************************************)
   and ('a, 'b) handle = ('a, 'b) delayed ref
+
+  and ('a, 'b) state =
+    | Free
+    (* Sanity check: is the worker still available ? *)
+    | Force_quit
+    (* Sanity check: is the worker currently busy ? *)
+    | Busy
+    (* If the worker is currently busy, handle of the job it's execuing *)
+    | Executing of ('a, 'b) handle
 
   (* Integer represents job the handle belongs to.
    * See MultiThreadedCall.call_id. *)
@@ -184,19 +190,28 @@ module MakeWorkerController
   let worker_id w = w.id
 
   (* Has the worker been force quit *)
-  let is_force_quit (w: worker) = w.is_force_quit
+  let is_force_quit (w: worker) =
+    match w.state with
+    | Force_quit -> true
+    | _ -> false
 
   (* Mark the worker as busy. Throw if it is already busy *)
   let mark_busy w =
-    if w.busy then raise Worker_busy;
-    w.busy <- true
+    match w.state with
+    | Busy
+    | Executing _ ->
+      raise Worker_busy
+    | Force_quit -> raise Worker_force_quit
+    | Free ->
+      w.state <- Busy
 
-  let get_handle_UNSAFE w = w.handle
+  let get_handle_UNSAFE w =
+    match w.state with
+    | Executing handle -> Some handle
+    | _ -> None
 
   (* Mark the worker as free *)
-  let mark_free w =
-    w.busy <- false;
-    w.handle <- None
+  let mark_free w = w.state <- Free
 
   (* If the worker isn't prespawned, spawn the worker *)
   let spawn (w: worker) =
@@ -250,9 +265,7 @@ module MakeWorkerController
         call_wrapper;
         controller_fd;
         id;
-        busy = false;
-        handle = None;
-        is_force_quit = false;
+        state = Free;
         kind;
       }
     in
@@ -454,7 +467,7 @@ module MakeWorkerController
     in
     (* And returned the 'handle'. *)
     let handle : (a, b) handle = ref ((x, call_id), Processing job) in
-    w.handle <- Some (Obj.magic handle);
+    w.state <- Obj.magic (Executing handle);
     handle
 
   (**************************************************************************
@@ -554,7 +567,7 @@ module MakeWorkerController
 
   let force_quit w =
     if not (is_force_quit w) then begin
-      w.is_force_quit <- true;
+      w.state <- Force_quit;
       match w.kind with
       | Prespawned handle -> Daemon.force_quit handle
       | _ -> ()

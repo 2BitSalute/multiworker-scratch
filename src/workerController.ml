@@ -36,6 +36,7 @@ module MakeWorkerController
     (Exception: Sys_sig.EXCEPTION)
     (Marshal_tools: Marshal_tools_sig.MARSHAL_TOOLS)
     (Measure: Sys_sig.MEASURE)
+    (PidLog: Sys_sig.PIDLOG)
     (SharedMem : SharedMem_sig.SHAREDMEM)
     (Sys_utils: Sys_sig.SYSUTILS)
     (Timeout: Sys_sig.TIMEOUT)
@@ -139,6 +140,7 @@ module MakeWorkerController
     (* If the worker is currently busy, handle of the job it's execuing *)
     mutable handle: 'a 'b. ('a, 'b) handle option;
     (* On Unix, a reference to the 'prespawned' worker. *)
+    (* TODO: why use this C++ approach here? *)
     prespawned: (void, request) Daemon.handle option;
     (* On Windows, a function to spawn a worker. *)
     spawn: unit -> (void, request) Daemon.handle;
@@ -386,7 +388,6 @@ module MakeWorkerController
           in
           close w h;
           Measure.merge (Measure.deserialize stats);
-          (* HackEventLogger.deserialize_globals log_globals; *)
           data)
     in
     let result () : b =
@@ -417,7 +418,9 @@ module MakeWorkerController
      * fail accordingly, since its clone has failed.
      *)
       try get_result_with_status_check () with
-      | End_of_file -> get_result_with_status_check ~block_on_waitpid:true ()
+      | End_of_file ->
+        PidLog.log "EOF!";
+        get_result_with_status_check ~block_on_waitpid:true ()
     in
     let wait_for_cancel () : unit =
       with_exit_status_check worker_pid (fun () ->

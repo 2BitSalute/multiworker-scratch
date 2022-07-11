@@ -161,6 +161,11 @@ module CoreOps : Core_sig.COREOPS = struct
   module Out_channel = struct
     type t = out_channel
 
+    let open_for_append file =
+      let perm = 0o666 in
+      let flags = [ Open_wronly; Open_creat; Open_append ] in
+      open_out_gen flags perm file
+
     (* Sorta copied from https://github.com/janestreet/stdio/blob/master/src/out_channel.ml *)
     let create file =
       let perm = 0o666 in

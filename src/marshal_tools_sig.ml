@@ -94,14 +94,4 @@ module type MARSHAL_TOOLS = sig
       [timeout] is the timeout for [Timeout.select] which selects ready file descriptors.
       Unix read operations interrupted by signals are automatically restarted. *)
   val from_fd_with_preamble : ?timeout:Timeout.t -> Unix.file_descr -> 'a
-
-  (* val to_fd_with_preamble :
-     ?timeout:Timeout.t ->
-     ?flags:Marshal.extern_flags list ->
-     WriterReader.fd ->
-     'a ->
-     int WriterReader.result
-
-     val from_fd_with_preamble :
-     ?timeout:Timeout.t -> WriterReader.fd -> 'a WriterReader.result *)
 end

@@ -69,10 +69,10 @@ module MakeException (String_utils: Sys_sig.STRINGUTILS) : Sys_sig.EXCEPTION = s
     else
       ctor ^ "\n" ^ bt
 
-  (* let get_current_callstack_string n =
-     Printexc.get_callstack n |> Printexc.raw_backtrace_to_string *)
+  let get_current_callstack_string n =
+    Printexc.get_callstack n |> Printexc.raw_backtrace_to_string
 
-  (* let record_backtrace = Printexc.record_backtrace *)
+  let record_backtrace = Printexc.record_backtrace
 
   let stack_re =
     Str.regexp

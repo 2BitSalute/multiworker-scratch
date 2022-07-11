@@ -27,9 +27,8 @@
 
 module MakeMarshalTools
     (Exception : Sys_sig.EXCEPTION)
-    (Timeout: Sys_sig.TIMEOUT)
+    (Timeout : Sys_sig.TIMEOUT)
     (Utils : Sys_sig.UTILS)
-  (* (WriterReader : Marshal_tools_sig.WRITER_READER) *)
   : Marshal_tools_sig.MARSHAL_TOOLS = struct
 
   module Exception = Exception
@@ -277,7 +276,8 @@ module MakeMarshalTools
 
     let from_fd_with_preamble ?timeout fd =
       let preamble = Bytes.create expected_preamble_size in
-      ( WriterReader.read
+      begin
+        WriterReader.read
           ?timeout
           fd
           ~buffer:preamble
@@ -289,12 +289,14 @@ module MakeMarshalTools
           (* Unix manpage for read says 0 bytes read indicates end of file. *)
         then
           WriterReader.fail End_of_file
-        else if bytes_read <> expected_preamble_size then (
+        else if bytes_read <> expected_preamble_size then begin
           WriterReader.log
             (Printf.sprintf "Error, only read %d bytes for preamble." bytes_read);
           WriterReader.fail Reading_Preamble_Exception
-        ) else
-          WriterReader.return () )
+        end
+        else
+          WriterReader.return ()
+      end
       >>= fun () ->
       let payload_size = parse_preamble preamble in
       let payload = Bytes.create payload_size in

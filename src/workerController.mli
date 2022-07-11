@@ -11,6 +11,7 @@ module MakeWorkerController
     (Exception: Sys_sig.EXCEPTION)
     (Marshal_tools: Marshal_tools_sig.MARSHAL_TOOLS)
     (Measure: Sys_sig.MEASURE)
+    (PidLog: Sys_sig.PIDLOG)
     (SharedMem : SharedMem_sig.SHAREDMEM)
     (Sys_utils: Sys_sig.SYSUTILS)
     (Timeout: Sys_sig.TIMEOUT)

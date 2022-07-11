@@ -134,17 +134,19 @@ module MakeWorkerController
      * it (it should be set to None). *)
     controller_fd: Unix.file_descr option;
     (* Sanity check: is the worker still available ? *)
-    mutable force_quit: bool;
+    mutable is_force_quit: bool;
     (* Sanity check: is the worker currently busy ? *)
     mutable busy: bool;
     (* If the worker is currently busy, handle of the job it's execuing *)
     mutable handle: 'a 'b. ('a, 'b) handle option;
-    (* On Unix, a reference to the 'prespawned' worker. *)
-    (* TODO: why use this C++ approach here? *)
-    prespawned: (void, request) Daemon.handle option;
-    (* On Windows, a function to spawn a worker. *)
-    spawn: unit -> (void, request) Daemon.handle;
+    kind: kind;
   }
+
+  and kind =
+    (* On Unix, a reference to the 'prespawned' worker. *)
+    | Prespawned of (void, request) Daemon.handle
+    (* On Windows, a function to spawn a worker. *)
+    | OnDemand of (unit -> (void, request) Daemon.handle)
 
   (*****************************************************************************
    * The handle is what we get back when we start a job. It's a "future"
@@ -182,7 +184,7 @@ module MakeWorkerController
   let worker_id w = w.id
 
   (* Has the worker been force quit *)
-  let is_force_quit w = w.force_quit
+  let is_force_quit (w: worker) = w.is_force_quit
 
   (* Mark the worker as busy. Throw if it is already busy *)
   let mark_busy w =
@@ -197,13 +199,16 @@ module MakeWorkerController
     w.handle <- None
 
   (* If the worker isn't prespawned, spawn the worker *)
-  let spawn w =
-    match w.prespawned with
-    | None -> w.spawn ()
-    | Some handle -> handle
+  let spawn (w: worker) =
+    match w.kind with
+    | OnDemand spawn -> spawn ()
+    | Prespawned handle -> handle
 
   (* If the worker isn't prespawned, close the worker *)
-  let close w h = if Option.is_none w.prespawned then Daemon.close h
+  let close w h =
+    match w.kind with
+    | OnDemand _ -> Daemon.close h
+    | _ -> ()
 
   (* If there is a call_wrapper, apply it and create the Request *)
   let wrap_request w f x =
@@ -234,11 +239,11 @@ module MakeWorkerController
   let make_one ?call_wrapper controller_fd spawn id =
     if id >= max_workers then failwith "Too many workers";
 
-    let prespawned =
+    let kind =
       if not use_prespawned then
-        None
+        OnDemand spawn
       else
-        Some (spawn ())
+        Prespawned (spawn ())
     in
     let worker =
       {
@@ -247,9 +252,8 @@ module MakeWorkerController
         id;
         busy = false;
         handle = None;
-        force_quit = false;
-        prespawned;
-        spawn;
+        is_force_quit = false;
+        kind;
       }
     in
     workers := worker :: !workers;
@@ -549,10 +553,12 @@ module MakeWorkerController
    **************************************************************************)
 
   let force_quit w =
-    if not (is_force_quit w) then (
-      w.force_quit <- true;
-      Option.iter ~f:Daemon.force_quit w.prespawned
-    )
+    if not (is_force_quit w) then begin
+      w.is_force_quit <- true;
+      match w.kind with
+      | Prespawned handle -> Daemon.force_quit handle
+      | _ -> ()
+    end
 
   let force_quit_all () = List.iter ~f:force_quit !workers
 

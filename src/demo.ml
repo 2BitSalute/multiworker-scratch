@@ -12,6 +12,28 @@ module Daemon = MultiWorker.MultiThreadedCall.WorkerController.Worker.Daemon
 module SharedMem = MultiWorker.MultiThreadedCall.WorkerController.SharedMem
 module WorkerController = MultiWorker.MultiThreadedCall.WorkerController
 
+(* Data model for Wikipedia jobs *)
+
+type article = {
+  text_hash: int;
+  length: int;
+  dependencies: string list;
+}
+
+type payload =
+  (* An article was explicitly asked to be checked by title *)
+  | Title of string
+  (* A stream contains 100 unrelated articles *)
+  | Stream of int64
+  (* Since we know an article's dependencies have already been queued, we just need to check that they're all finished *)
+  | Article of article
+
+(* We found dependencies, and they need to be checked first, articles next *)
+type result = {
+  articles: article list;
+  streams: int64 list;
+}
+
 module Global_state = struct
   type state = {
     dummy: int
@@ -123,5 +145,18 @@ let () =
       ~merge
       ~next:(MultiWorker.next workers next_list)
   in
+
+  Demo_domains.run ();
+  (* Index file:
+     enwiki-20211020-pages-articles-multistream-index.txt.bz2
+     Multistream:
+     enwiki-20211020-pages-articles-multistream.xml.bz2
+
+     The index format is:
+     offset:article_id:title
+
+     The offset is the number of bytes into the COMPRESSED stream, NOT the number of bytes to skip reading using BZ2 reader.
+  *)
+  Demo_bz2.run ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream.xml.bz2") 597L;
 
   Printf.printf "*** DONE: %d ***\n\n%!" (List.length c)

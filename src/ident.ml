@@ -56,7 +56,8 @@ module MakeIdent
 
   let pp = Format.pp_print_int
 
-  let not_equal x y = not @@ equal x y
+  (* not @@ equal x y *)
+  let not_equal x y = not @@ (=) x y
 
   let hash_range_min = 100_000_000_000_000
 

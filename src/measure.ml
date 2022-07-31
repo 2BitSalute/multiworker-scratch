@@ -241,7 +241,7 @@ module MakeMeasure
         | (from, None) -> from
         | (Some { bucket_size = from; _ }, Some { bucket_size = into; _ })
           when not (Float.equal from into) ->
-          Stdlib.Printf.kprintf
+          Printf.ksprintf
             failwith
             "Merging buckets for %s failed: bucket sizes %f, %f"
             name

@@ -134,8 +134,10 @@
 (executable
  (name demo)
  (public_name demo)
- (modules demo demo_setup)
+ (modules demo_bz2 demo demo_domains demo_setup)
  (libraries
+  camlbz2
+  domainslib
   heap_shared_mem
   procs_entry_point
   procs_procs

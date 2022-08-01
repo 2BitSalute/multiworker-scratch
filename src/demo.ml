@@ -157,6 +157,15 @@ let () =
 
      The offset is the number of bytes into the COMPRESSED stream, NOT the number of bytes to skip reading using BZ2 reader.
   *)
-  Demo_bz2.run ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream.xml.bz2") 597L;
+
+  Demo_bz2.index ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2");
+
+  if false then begin
+    let filename =
+      Demo_bz2.catalog ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream.xml.bz2") 597L
+    in
+
+    Demo_xmlm.run filename;
+  end;
 
   Printf.printf "*** DONE: %d ***\n\n%!" (List.length c)

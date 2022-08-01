@@ -131,19 +131,36 @@
  (modules workerControllerEntryPoint)
  (libraries procs_procs))
 
+(library
+ (name sqlite_utils)
+ (modules sqlite_utils)
+ (wrapped false)
+ (libraries procs_core_ops sqlite3))
+
+(library
+ (name reverse_index)
+ (modules reverse_index)
+ (wrapped false)
+ (libraries procs_sys murmur3 sqlite3 sqlite_utils)
+ (preprocess
+  (pps ppx_deriving.std)))
+
 (executable
  (name demo)
  (public_name demo)
- (modules demo_bz2 demo demo_domains demo_setup)
+ (modules demo_bz2 demo demo_domains demo_setup demo_xmlm)
  (libraries
   camlbz2
   domainslib
   heap_shared_mem
+  lz4
+  pcre
   procs_entry_point
   procs_procs
   procs_sys
   procs_bucket
   procs_cancel
+  reverse_index
   sqlite3
-  lz4
+  xmlm
   zstd))

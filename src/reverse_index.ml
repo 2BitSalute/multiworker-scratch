@@ -209,8 +209,9 @@ let save_name stmt_cache ~name ~id ~offset : (unit, insertion_error) result =
 let resolve_db_name db_name name =
   let initial = String.sub name 0 1 |> String.lowercase_ascii in
   let suffix = match initial with
-    | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
-    | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
+    (* Omitting q and x - these are rare enough that they can go into "_" *)
+    | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l"
+    | "m" | "n" | "o" | "p" | "r" | "s" | "t" | "u" | "v" | "w" | "y" | "z"
       -> initial
     | _
       -> "_"

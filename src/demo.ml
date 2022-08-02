@@ -158,7 +158,18 @@ let () =
      The offset is the number of bytes into the COMPRESSED stream, NOT the number of bytes to skip reading using BZ2 reader.
   *)
 
-  Demo_bz2.index ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2");
+  (* Demo_bz2.index ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2"); *)
+
+  let next_seq = Demo_bz2.index2 ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2") in
+  let _result = Reverse_index.save_names "foo.sql" next_seq in
+
+  begin
+    match Reverse_index.get (Reverse_index.Db_path "foo.sql") "Autism" with
+    | Some (name, id, offset) ->
+      Printf.printf "Name: %s, ID: %s, Offset: %s\n" name (Int64.to_string id) (Int64.to_string offset);
+    | None ->
+      Printf.printf "Not found!\n";
+  end;
 
   if false then begin
     let filename =

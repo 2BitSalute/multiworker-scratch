@@ -160,15 +160,29 @@ let () =
 
   (* Demo_bz2.index ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2"); *)
 
-  let next_seq = Demo_bz2.index2 ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2") in
-  let _result = Reverse_index.save_names "foo.sql" next_seq in
+  let next_seq = Demo_bz2.index2 ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2") ~n_pages:20 in
+  let db_name = "foo_db" in
+  let files = Sys.readdir "." |> Array.to_list in
+  List.iter (fun file -> if String.starts_with ~prefix:db_name file then Sys.remove file) files;
+
+  let _result = Reverse_index.save_names db_name next_seq in
 
   begin
-    match Reverse_index.get (Reverse_index.Db_path "foo.sql") "Autism" with
-    | Some (name, id, offset) ->
-      Printf.printf "Name: %s, ID: %s, Offset: %s\n" name (Int64.to_string id) (Int64.to_string offset);
-    | None ->
+    let query_db_cache = Reverse_index.QueryDbCache.make db_name in
+    match Reverse_index.get query_db_cache "Andorra" with
+    | [] ->
       Printf.printf "Not found!\n";
+    | entries  ->
+      List.iter
+        Reverse_index.(fun { entry = { name; id; offset; }; hash; canon_hash } ->
+            Printf.printf
+              "Name: %s, ID: %s, Offset: %s Hash: %s Canonical hash: %s\n"
+              name
+              (Int64.to_string id)
+              (Int64.to_string offset)
+              (Int64.to_string hash)
+              (Int64.to_string canon_hash))
+        entries
   end;
 
   if false then begin

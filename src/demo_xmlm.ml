@@ -1,7 +1,9 @@
 let to_topic substrings =
   let s = Pcre.get_substring !substrings 1 in
   let strings = Pcre.split ~pat:"\\|" ~max:0 s in
-  Pcre.replace ~templ:"_" (List.hd strings)
+  List.hd strings
+  |> Pcre.replace ~templ:"_"
+  |> String.lowercase_ascii
 
 let examine_text i =
   let () = match Xmlm.input i with

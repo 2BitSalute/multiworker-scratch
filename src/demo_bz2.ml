@@ -62,11 +62,7 @@ let catalog iname bytes_to_skip =
 
   filename
 
-type entry = {
-  offset: int;
-  id: int;
-  title: string;
-}
+type entry = Reverse_index.entry
 
 let index iname =
   let ic = open_in iname in
@@ -83,9 +79,9 @@ let index iname =
   let get_entry s =
     let tokens = Pcre.split ~pat:":" ~max:0 s in
     List.iter (fun s -> Printf.printf "- %s\n" s) tokens;
-    {
-      offset = int_of_string (List.nth tokens 0);
-      id = int_of_string (List.nth tokens 1);
+    Reverse_index.{
+      offset = Int64.of_string (List.nth tokens 0);
+      id = Int64.of_string (List.nth tokens 1);
       title = List.nth tokens 2;
     }
   in
@@ -100,7 +96,7 @@ let index iname =
         let f c =
           if c = '\n' then begin
             let entry = get_entry (!prefix ^ Bytes.sub_string buf !start !length) in
-            Printf.printf "%d %d %s\n" entry.offset entry.id entry.title;
+            Printf.printf "%s %s %s\n" (Int64.to_string entry.offset) (Int64.to_string entry.id) entry.title;
             start := !start + !length + 1;
             length := 0;
             prefix := "";
@@ -131,3 +127,62 @@ let index iname =
 
   Bz2.close_in bzic;
   close_in ic
+
+let index2 iname : entry list Seq.t =
+  let ic = open_in iname in
+
+  let buflen =
+    128
+    (* 256 *)
+  in
+
+  let buf = Bytes.create buflen in
+
+  let bzic = Bz2.open_in ic in
+
+  let get_entry s =
+    let tokens = Pcre.split ~pat:":" ~max:0 s in
+    List.iter (fun s -> Printf.printf "- %s\n" s) tokens;
+    Reverse_index.{
+      offset = Int64.of_string (List.nth tokens 0);
+      id = Int64.of_string (List.nth tokens 1);
+      title = List.nth tokens 2;
+    }
+  in
+
+  let read (n, prefix) : (entry list * (int * string)) option =
+    if n <> 0 then begin
+      try
+        let bytes_read = Bz2.read bzic buf 0 buflen in
+        let f (start, length, prefix, entries) c =
+          if c = '\n' then begin
+            let entry = get_entry (prefix ^ Bytes.sub_string buf start length) in
+            Printf.printf "%s %s %s\n" (Int64.to_string entry.offset) (Int64.to_string entry.id) entry.title;
+            (start + length + 1, 0, "", entry :: entries)
+          end
+          else
+            (start, length + 1, prefix, entries)
+        in
+        let (start, length, _prefix, entries) = Bytes.fold_left f (0, 0, prefix, []) buf in
+        let prefix =
+          if length > 0 then
+            Bytes.sub_string buf start length
+          else
+            ""
+        in
+
+        if bytes_read < buflen then
+          raise End_of_file;
+
+        Some (entries, ((n - 1), prefix))
+      with End_of_file ->
+        Bz2.close_in bzic;
+        close_in ic;
+        None
+    end
+    else
+      None
+  in
+
+  Seq.unfold read (3, "")
+

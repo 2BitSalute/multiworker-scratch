@@ -138,7 +138,7 @@ module SymbolTable = struct
     let insert_stmt = StatementCache.make_stmt stmt_cache insert_sqlite in
     Sqlite3.bind insert_stmt 1 (Sqlite3.Data.INT hash) |> check_rc db;
     Sqlite3.bind insert_stmt 2 (Sqlite3.Data.INT id) |> check_rc db;
-    Sqlite3.bind insert_stmt 5 (Sqlite3.Data.INT catalog_offset) |> check_rc db;
+    Sqlite3.bind insert_stmt 3 (Sqlite3.Data.INT catalog_offset) |> check_rc db;
     insert_safe ~name ~hash @@ fun () ->
     Sqlite3.step insert_stmt |> check_rc db
 
@@ -198,25 +198,28 @@ let save_name db stmt_cache ~name ~id ~catalog_offset : (unit, insertion_error) 
     ~id
     ~catalog_offset
 
-let save_names db_name (next: unit -> (string * int64 * int64) option) : save_result =
+type entry = {
+  offset: int64;
+  id: int64;
+  title: string;
+}
+
+let save_names db_name next_seq : save_result =
   let db = Sqlite3.db_open db_name in
   let stmt_cache = StatementCache.make ~db in
   Sqlite3.exec db "BEGIN TRANSACTION;" |> check_rc db;
   try
     Sqlite3.exec db SymbolTable.create_table_sqlite |> check_rc db;
-    let rec save_next save_result =
-      match next () with
-      | Some (name, id, catalog_offset) ->
-        begin
-          let save_result = match save_name db stmt_cache ~name ~id ~catalog_offset with
-            | Error insertion_error -> { save_result with errors = insertion_error :: save_result.errors }
-            | Ok () -> { save_result with symbols_added = save_result.symbols_added + 1 }
-          in
-          save_next save_result
-        end
-      | None -> save_result
+    let save_entries save_result entries =
+      let f save_result entry =
+        match save_name db stmt_cache ~name:entry.title ~id:entry.id ~catalog_offset:entry.offset with
+        | Error insertion_error -> { save_result with errors = insertion_error :: save_result.errors }
+        | Ok () -> { save_result with symbols_added = save_result.symbols_added + 1 }
+      in
+      List.fold_left f save_result entries
     in
-    let save_result = save_next empty_save_result in
+    let save_result = Seq.fold_left save_entries empty_save_result next_seq in
+
     Sqlite3.exec db "END TRANSACTION;" |> check_rc db;
     Sqlite3.exec db "VACUUM;" |> check_rc db;
     StatementCache.close stmt_cache;
@@ -228,7 +231,7 @@ let save_names db_name (next: unit -> (string * int64 * int64) option) : save_re
     Sqlite3.exec db "END TRANSACTION;" |> check_rc db;
     raise e
 
-let get_path (db_path : db_path) name =
+let get (db_path : db_path) name : (string * int64 * int64) option =
   let (db, stmt_cache) = get_db_and_stmt_cache db_path in
   SymbolTable.get
     db

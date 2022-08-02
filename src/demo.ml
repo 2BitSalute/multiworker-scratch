@@ -160,8 +160,12 @@ let () =
 
   (* Demo_bz2.index ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2"); *)
 
-  let next_seq = Demo_bz2.index2 ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2") ~n_pages:20 in
-  let db_name = "foo_db" in
+  let next_seq =
+    Demo_bz2.index2
+      ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2")
+      ~n_pages:(-1)
+  in
+  let db_name = "wikipedia_reverse_index" in
   let files = Sys.readdir "." |> Array.to_list in
   List.iter (fun file -> if String.starts_with ~prefix:db_name file then Sys.remove file) files;
 

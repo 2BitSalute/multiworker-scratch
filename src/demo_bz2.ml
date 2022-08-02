@@ -77,13 +77,17 @@ let index iname =
   let bzic = Bz2.open_in ic in
 
   let get_entry s =
-    let tokens = Pcre.split ~pat:":" ~max:0 s in
-    List.iter (fun s -> Printf.printf "- %s\n" s) tokens;
-    Reverse_index.{
-      offset = Int64.of_string (List.nth tokens 0);
-      id = Int64.of_string (List.nth tokens 1);
-      title = List.nth tokens 2;
-    }
+    try
+      let tokens = Pcre.split ~pat:":" ~max:0 s in
+      List.iter (fun s -> Printf.printf "- %s\n" s) tokens;
+      Reverse_index.{
+        offset = Int64.of_string (List.nth tokens 0);
+        id = Int64.of_string (List.nth tokens 1);
+        name = List.nth tokens 2;
+      }
+    with e ->
+      Printf.printf "\nPATTERN: %s\n" s;
+      raise e
   in
 
   let rec read n prefix =
@@ -96,7 +100,7 @@ let index iname =
         let f c =
           if c = '\n' then begin
             let entry = get_entry (!prefix ^ Bytes.sub_string buf !start !length) in
-            Printf.printf "%s %s %s\n" (Int64.to_string entry.offset) (Int64.to_string entry.id) entry.title;
+            Printf.printf "%s %s %s\n" (Int64.to_string entry.offset) (Int64.to_string entry.id) entry.name;
             start := !start + !length + 1;
             length := 0;
             prefix := "";
@@ -128,12 +132,11 @@ let index iname =
   Bz2.close_in bzic;
   close_in ic
 
-let index2 iname : entry list Seq.t =
+let index2 iname ~n_pages : entry list Seq.t =
   let ic = open_in iname in
 
   let buflen =
-    128
-    (* 256 *)
+    8192
   in
 
   let buf = Bytes.create buflen in
@@ -141,14 +144,23 @@ let index2 iname : entry list Seq.t =
   let bzic = Bz2.open_in ic in
 
   let get_entry s =
-    let tokens = Pcre.split ~pat:":" ~max:0 s in
-    List.iter (fun s -> Printf.printf "- %s\n" s) tokens;
-    Reverse_index.{
-      offset = Int64.of_string (List.nth tokens 0);
-      id = Int64.of_string (List.nth tokens 1);
-      title = List.nth tokens 2;
-    }
+    try
+      let tokens = Pcre.split ~pat:":" ~max:0 s in
+      Some Reverse_index.{
+          offset = Int64.of_string (List.nth tokens 0);
+          id = Int64.of_string (List.nth tokens 1);
+          name = List.nth tokens 2;
+        }
+    with _ ->
+      (* There are some weird patterns like
+         inmahintarayutthayamahadilokphopnopparatrajathaniburiromudomrajaniwesmahasatharnamornphimarnavatarnsathitsakkattiyavisanukamprasit
+      *)
+      Printf.printf "SKIPPING: %s\n" s;
+      None
   in
+
+  let num_entries = ref 0 in
+  let last_entry = ref None in
 
   let read (n, prefix) : (entry list * (int * string)) option =
     if n <> 0 then begin
@@ -156,9 +168,15 @@ let index2 iname : entry list Seq.t =
         let bytes_read = Bz2.read bzic buf 0 buflen in
         let f (start, length, prefix, entries) c =
           if c = '\n' then begin
-            let entry = get_entry (prefix ^ Bytes.sub_string buf start length) in
-            Printf.printf "%s %s %s\n" (Int64.to_string entry.offset) (Int64.to_string entry.id) entry.title;
-            (start + length + 1, 0, "", entry :: entries)
+            match get_entry (prefix ^ Bytes.sub_string buf start length) with
+            | Some entry ->
+              last_entry := Some entry;
+              num_entries := !num_entries + 1;
+              (* Printf.printf "%s %s %s\n" (Int64.to_string entry.offset) (Int64.to_string entry.id) entry.name; *)
+              (start + length + 1, 0, "", entry :: entries)
+            | None ->
+              (* SKIPPING *)
+              (start + length + 1, 0, "", entries)
           end
           else
             (start, length + 1, prefix, entries)
@@ -181,8 +199,13 @@ let index2 iname : entry list Seq.t =
         None
     end
     else
-      None
+      match !last_entry with
+      | Some { name; _ } ->
+        Printf.printf "\n\nLAST ENTRY: %d %s\n\n" !num_entries name;
+        None
+      | None ->
+        failwith "Woops"
   in
 
-  Seq.unfold read (3, "")
+  Seq.unfold read (n_pages, "")
 

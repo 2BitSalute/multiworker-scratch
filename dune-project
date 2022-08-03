@@ -14,5 +14,4 @@
 (package
  (name multiworker)
  (synopsis "Multiworker implementation")
- (description "Multiprocess")
-)
+ (description "Multiprocess"))

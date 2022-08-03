@@ -27,7 +27,6 @@ let catalog iname bytes_to_skip =
 
   let buflen =
     8192
-    (* 256 *)
   in
 
   let buf = Bytes.create buflen in
@@ -62,75 +61,49 @@ let catalog iname bytes_to_skip =
 
   filename
 
-type entry = Reverse_index.entry
-
-let index iname =
+let read_catalog_at_offset iname bytes_to_skip =
   let ic = open_in iname in
 
+  In_channel.seek ic bytes_to_skip;
+
   let buflen =
-    128
-    (* 256 *)
+    8192
   in
+
+  let total_buffer = Buffer.create buflen in
 
   let buf = Bytes.create buflen in
-
   let bzic = Bz2.open_in ic in
 
-  let get_entry s =
-    try
-      let tokens = Pcre.split ~pat:":" ~max:0 s in
-      List.iter (fun s -> Printf.printf "- %s\n" s) tokens;
-      Reverse_index.{
-        offset = Int64.of_string (List.nth tokens 0);
-        id = Int64.of_string (List.nth tokens 1);
-        name = List.nth tokens 2;
-      }
-    with e ->
-      Printf.printf "\nPATTERN: %s\n" s;
-      raise e
-  in
+  (* TODO: Factor this out! *)
+  Buffer.add_string total_buffer "<pages>\n";
 
-  let rec read n prefix =
+  let rec read n =
     if n <> 0 then begin
       try
         let bytes_read = Bz2.read bzic buf 0 buflen in
-        let start = ref 0 in
-        let length = ref 0 in
-        let prefix = ref prefix in
-        let f c =
-          if c = '\n' then begin
-            let entry = get_entry (!prefix ^ Bytes.sub_string buf !start !length) in
-            Printf.printf "%s %s %s\n" (Int64.to_string entry.offset) (Int64.to_string entry.id) entry.name;
-            start := !start + !length + 1;
-            length := 0;
-            prefix := "";
-          end
-          else
-            length := !length + 1;
-        in
-        Bytes.iter f buf;
-        let prefix =
-          if !length > 0 then
-            Bytes.sub_string buf !start !length
-          else
-            ""
-        in
-
-        (* Out_channel.output Out_channel.stdout buf 0 bytes_read; *)
+        Buffer.add_subbytes total_buffer buf 0 bytes_read;
         if bytes_read < buflen then
           raise End_of_file
         else
-          read (n - 1) prefix
+          read (n - 1)
       with End_of_file ->
         ()
     end
   in
 
-  (* read (-1); *)
-  read 3 "";
+  read (-1);
+
+  (* TODO: Factor this out! *)
+  Buffer.add_string total_buffer "</pages>\n";
 
   Bz2.close_in bzic;
-  close_in ic
+  close_in ic;
+  close_out oc;
+
+  total_buffer
+
+type entry = Reverse_index.entry
 
 let index2 iname ~n_pages : entry list Seq.t =
   let ic = open_in iname in

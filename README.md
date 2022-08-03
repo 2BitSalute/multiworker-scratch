@@ -12,8 +12,9 @@ Tactical matters:
 - Need to build a naming table in memory or in SQLite
     - <article name> -> <offset in multistream>
 
-Small job:
-d and c depend on b
-b depends on a
+Time on the version on commit dc59157 (the first version that created the reverse index for the entire index of Wikipedia):
+```
+dune exec src/demo.exe  226.51s user 32.93s system 98% cpu 4:24.11 total
+```
 
-Start with a
+Next: create a job to compute a hash of an article based on the hash of its text and its referenced dependencies

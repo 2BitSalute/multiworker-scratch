@@ -24,8 +24,7 @@ let examine_text i =
   in
   ()
 
-let find_links ic =
-  let i = Xmlm.make_input (`Channel ic) in
+let find_links i =
   let rec process i depth =
     match Xmlm.input i with
     | `El_start ((_namespace, tag), _attributes) when tag = "text" ->
@@ -40,7 +39,14 @@ let find_links ic =
   let _root = Xmlm.input i in
   process i 0
 
+let run_with_string s =
+  let i = Xmlm.make_input (`String (0, s)) in
+  find_links i;
+  ()
+
 let run filename =
   let ic = In_channel.open_bin filename in
-  find_links ic;
+  let i = Xmlm.make_input (`Channel ic) in
+  find_links i;
+  In_channel.close ic;
   ()

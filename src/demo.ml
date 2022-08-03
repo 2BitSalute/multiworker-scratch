@@ -160,19 +160,28 @@ let () =
 
   (* Demo_bz2.index ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2"); *)
 
-  let next_seq =
-    Demo_bz2.index2
-      ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2")
-      ~n_pages:(-1)
-  in
   let db_name = "wikipedia_reverse_index" in
-  let files = Sys.readdir "." |> Array.to_list in
-  List.iter (fun file -> if String.starts_with ~prefix:db_name file then Sys.remove file) files;
 
-  let _result = Reverse_index.save_names db_name next_seq in
+  let generate_reverse_index = false in
+  let compute_article_hash = true in
+
+  if generate_reverse_index then
+    begin
+      let next_seq =
+        Demo_bz2.index2
+          ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream-index.txt.bz2")
+          ~n_pages:(-1)
+      in
+      let files = Sys.readdir "." |> Array.to_list in
+      List.iter (fun file -> if String.starts_with ~prefix:db_name file then Sys.remove file) files;
+
+      let _result = Reverse_index.save_names db_name next_seq in
+      ()
+    end;
+
+  let query_db_cache = Reverse_index.QueryDbCache.make db_name in
 
   begin
-    let query_db_cache = Reverse_index.QueryDbCache.make db_name in
     match Reverse_index.get query_db_cache "Andorra" with
     | [] ->
       Printf.printf "Not found!\n";
@@ -189,12 +198,12 @@ let () =
         entries
   end;
 
-  if false then begin
-    let filename =
-      Demo_bz2.catalog ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream.xml.bz2") 597L
-    in
-
-    Demo_xmlm.run filename;
-  end;
+  if compute_article_hash then
+    begin
+      let filename =
+        Demo_bz2.catalog ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream.xml.bz2") 597L
+      in
+      Demo_xmlm.run filename;
+    end;
 
   Printf.printf "*** DONE: %d ***\n\n%!" (List.length c)

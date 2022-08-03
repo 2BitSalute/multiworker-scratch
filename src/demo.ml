@@ -200,10 +200,15 @@ let () =
 
   if compute_article_hash then
     begin
-      let filename =
-        Demo_bz2.catalog ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream.xml.bz2") 597L
+      let buffer =
+        Demo_bz2.read_catalog_at_offset
+          ("../wikipedia/" ^ "enwiki-20211020-pages-articles-multistream.xml.bz2")
+          597L
       in
-      Demo_xmlm.run filename;
+      let topics =
+        Demo_xmlm.run_with_string (Buffer.contents buffer)
+      in
+      ignore topics;
     end;
 
   Printf.printf "*** DONE: %d ***\n\n%!" (List.length c)

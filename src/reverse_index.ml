@@ -95,7 +95,11 @@ module StatementCache = struct
 end
 
 (* TODO: move lowercase_ascii to Core_ops *)
-let to_canon_name_key = String.lowercase_ascii
+let to_canon_name_key name =
+  name
+  (* TODO: put it back in and regen the reverse index *)
+  (* |> Pcre.replace ~templ:"_" *)
+  |> String.lowercase_ascii
 
 let fold_sqlite stmt ~f ~init =
   let rec helper acc =

@@ -99,7 +99,6 @@ let read_catalog_at_offset iname bytes_to_skip =
 
   Bz2.close_in bzic;
   close_in ic;
-  close_out oc;
 
   total_buffer
 
@@ -108,28 +107,20 @@ type entry = Reverse_index.entry
 let index2 iname ~n_pages : entry list Seq.t =
   let ic = open_in iname in
 
-  let buflen =
-    8192
-  in
+  (* The buffer length has to be sufficient to get long titles into two chunks;
+     the logic below doesn't account for lines spanning more than two. *)
+  let buflen = 8192 in
 
   let buf = Bytes.create buflen in
-
   let bzic = Bz2.open_in ic in
 
   let get_entry s =
-    try
-      let tokens = Pcre.split ~pat:":" ~max:0 s in
-      Some Reverse_index.{
-          offset = Int64.of_string (List.nth tokens 0);
-          id = Int64.of_string (List.nth tokens 1);
-          name = List.nth tokens 2;
-        }
-    with _ ->
-      (* There are some weird patterns like
-         inmahintarayutthayamahadilokphopnopparatrajathaniburiromudomrajaniwesmahasatharnamornphimarnavatarnsathitsakkattiyavisanukamprasit
-      *)
-      Printf.printf "SKIPPING: %s\n" s;
-      None
+    let tokens = Pcre.split ~pat:":" ~max:0 s in
+    Reverse_index.{
+      offset = Int64.of_string (List.nth tokens 0);
+      id = Int64.of_string (List.nth tokens 1);
+      name = List.nth tokens 2;
+    }
   in
 
   let num_entries = ref 0 in
@@ -140,31 +131,26 @@ let index2 iname ~n_pages : entry list Seq.t =
       try
         let bytes_read = Bz2.read bzic buf 0 buflen in
         let f (start, length, prefix, entries) c =
-          if c = '\n' then begin
-            match get_entry (prefix ^ Bytes.sub_string buf start length) with
-            | Some entry ->
+          if c = '\n' then
+            begin
+              let entry = get_entry (prefix ^ Bytes.sub_string buf start length) in
               last_entry := Some entry;
               num_entries := !num_entries + 1;
-              (* Printf.printf "%s %s %s\n" (Int64.to_string entry.offset) (Int64.to_string entry.id) entry.name; *)
               (start + length + 1, 0, "", entry :: entries)
-            | None ->
-              (* SKIPPING *)
-              (start + length + 1, 0, "", entries)
-          end
+            end
           else
             (start, length + 1, prefix, entries)
         in
         let (start, length, _prefix, entries) = Bytes.fold_left f (0, 0, prefix, []) buf in
+        (* the remainder of the current chunk that should be prepended to the next chunk to form an entry line *)
         let prefix =
           if length > 0 then
             Bytes.sub_string buf start length
           else
             ""
         in
-
         if bytes_read < buflen then
           raise End_of_file;
-
         Some (entries, ((n - 1), prefix))
       with End_of_file ->
         Bz2.close_in bzic;

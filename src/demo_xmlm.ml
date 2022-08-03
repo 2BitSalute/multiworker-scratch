@@ -1,9 +1,7 @@
 let to_topic substrings =
-  let s = Pcre.get_substring !substrings 1 in
+  let s = Pcre.get_substring substrings 1 in
   let strings = Pcre.split ~pat:"\\|" ~max:0 s in
   List.hd strings
-  |> Pcre.replace ~templ:"_"
-  |> String.lowercase_ascii
 
 let examine_text i =
   let () = match Xmlm.input i with
@@ -13,7 +11,7 @@ let examine_text i =
         try
           let (substrings: Pcre.substrings ref) = ref (Pcre.exec ~rex data) in
           while true do
-            let topic = to_topic substrings in
+            let topic = to_topic !substrings in
             Printf.printf "%s\n" topic;
             substrings := Pcre.next_match ~rex !substrings;
           done;

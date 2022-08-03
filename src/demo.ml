@@ -208,7 +208,7 @@ let () =
       let topics =
         Demo_xmlm.run_with_string (Buffer.contents buffer)
       in
-      ignore topics;
+      List.iter (fun topic -> Printf.printf "%s\n" topic) topics;
     end;
 
   Printf.printf "*** DONE: %d ***\n\n%!" (List.length c)

@@ -221,7 +221,7 @@ let () =
   in
 
   let get_article_from_catalog topic offset : Demo_xmlm.article list =
-    Printf.printf "Look up topic %s at offset %s\n" topic (Int64.to_string offset);
+    Printf.printf "Look up topic %s at offset %s\n%!" topic (Int64.to_string offset);
     (* Look up article *)
     if not (I64S.mem offset seen_offsets) then
       begin
@@ -309,22 +309,24 @@ let () =
   in
 
   let rec check_article_transitively topic : int64 list =
-    let process_result result =
+    let process_result acc result =
       match result with
-      | Hash hash -> hash
-      | NotFound topic -> failwith (Printf.sprintf "Did not find %s\n" topic)
+      | Hash hash -> hash :: acc
+      | NotFound topic ->
+        if String.starts_with topic ~prefix:"Image:" then acc
+        else failwith (Printf.sprintf "Did not find %s\n" topic)
       | Deps (hash, deps) ->
         let resolved = List.map check_article_transitively deps in
-        compute_article_hash hash (List.flatten resolved)
+        compute_article_hash hash (List.flatten resolved) :: acc
     in
     match check_article topic with
     | [] -> failwith (Printf.sprintf "This should not happen; no results for %s?\n" topic)
-    | results -> List.map process_result results
+    | results -> List.fold_left process_result [] results
   in
 
   if should_check_article then
     begin
-      match check_article_transitively "Autism" with
+      match check_article_transitively "Capital city" with
       | [] -> failwith "This should not happen; no results?"
       | hashes -> List.iter (fun hash -> Printf.printf "Final hash is %s\n" (Int64.to_string hash)) hashes
     end;

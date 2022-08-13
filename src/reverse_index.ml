@@ -331,3 +331,46 @@ let get (db_cache : QueryDbCache.t) name : retrieval_entry list =
     (QueryDbCache.db db_cache name)
     name
     SymbolTable.get_sqlite
+
+module type REVERSE_INDEX = sig
+  val get_entries : string -> retrieval_entry list
+end
+
+module SqliteIndex = struct
+  let db_cache = ref None
+
+  let init cache =
+    db_cache := Some cache
+
+  let get_entries name =
+    match !db_cache with
+    | Some db_cache -> get db_cache name
+    | None -> failwith "DB Cache not set!"
+end
+
+module TestIndex = struct
+  let (names : (int64, retrieval_entry list) Hashtbl.t) = Hashtbl.create 10
+
+  let to_canon_hash name =
+    to_canon_name_key name |> Murmur3.hash64
+
+  let add name =
+    let canon_hash = to_canon_hash name in
+    let entry = {
+      entry = {
+        name;
+        id = Int64.of_int 0;
+        offset = Int64.of_int 0;
+      };
+      hash = Murmur3.hash64 name;
+      canon_hash;
+    }
+    in
+    match Hashtbl.find_opt names canon_hash with
+    | None -> Hashtbl.add names canon_hash [ entry ]
+    | Some entries -> Hashtbl.add names canon_hash (entry :: entries);
+      ()
+
+  let get_entries name : retrieval_entry list =
+    Hashtbl.find names (to_canon_hash name)
+end

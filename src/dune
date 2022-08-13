@@ -148,7 +148,7 @@
 (executable
  (name demo)
  (public_name demo)
- (modules demo_bz2 demo demo_domains demo_setup demo_xmlm)
+ (modules demo_bz2 demo demo_catalog demo_domains demo_setup demo_xmlm)
  (libraries
   camlbz2
   domainslib

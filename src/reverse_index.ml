@@ -371,7 +371,7 @@ module SqliteIndex = struct
   let init cache =
     db_cache := Some cache
 
-  let get_entries name =
+  let get_entries name : (retrieval_entry list, retrieval_error) result =
     match !db_cache with
     | Some db_cache ->
       get db_cache name
@@ -401,6 +401,6 @@ module TestIndex = struct
     | Some entries -> Hashtbl.add names canon_hash (entry :: entries);
       ()
 
-  let get_entries name : retrieval_entry list =
-    Hashtbl.find names (to_canon_hash name)
+  let get_entries name : (retrieval_entry list, retrieval_error) result =
+    Ok (Hashtbl.find names (to_canon_hash name))
 end

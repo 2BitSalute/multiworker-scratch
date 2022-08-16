@@ -8,6 +8,10 @@
 
 module SharedMem : SharedMem_sig.SHAREDMEM
 
+module MakeSMTelemetry
+    (Core: Core_sig.COREOPS)
+    (Telemetry: Sys_sig.TELEMETRY) : SharedMem_sig.SMTELEMETRY
+
 (** Directly access the shared memory table.
 
     This can be used to provide proxying across the network *)

@@ -32,16 +32,36 @@ let skipped_prefixes = [
 
 module type ARTICLE_CACHE = sig
   val mem : string -> bool
+  val add : string -> (Reverse_index.retrieval_entry list, Reverse_index.retrieval_error) result -> unit
 end
 
 module SharedMemArticleCache : ARTICLE_CACHE = struct
-  let mem _topic = failwith "TODO: Not imlemented"
+  module Key = struct
+    type t = string
+    let to_string t = t
+    let compare = String.compare
+  end
+  module Value = struct
+    type t = (Reverse_index.retrieval_entry list, Reverse_index.retrieval_error) result
+    let description = "Index retrieval result"
+  end
+  module KeyHasher = SM.MakeKeyHasher (Key)
+  module SharedMemHashTable = Demo_setup.SharedMemHashTable (KeyHasher) (Value)
+
+  let mem (topic: string) : bool =
+    SharedMemHashTable.mem (KeyHasher.hash topic)
+
+  let add
+      (topic: string)
+      (result: (Reverse_index.retrieval_entry list, Reverse_index.retrieval_error) result)
+    : unit =
+    SharedMemHashTable.add (KeyHasher.hash topic) result
 end
 
 module HashTableArticleCache : ARTICLE_CACHE = struct
   let cache = Hashtbl.create 1000
-
   let mem = Hashtbl.mem cache
+  let add = Hashtbl.add cache
 end
 
 module ShallowChecker
@@ -49,7 +69,7 @@ module ShallowChecker
     (Catalog : Demo_catalog.CATALOG)
     (ArticleCache : ARTICLE_CACHE) = struct
 
-  type error = 
+  type error =
     | Catalog_error of string * Demo_catalog.catalog_error
     | Index_error of string * Reverse_index.retrieval_error
 
@@ -102,7 +122,9 @@ module ShallowChecker
       List.fold_left loop acc articles
 
   let check_article_deps acc topic =
-    match Index.get_entries topic with
+    let retrieval_result = Index.get_entries topic  in
+    ArticleCache.add topic retrieval_result;
+    match retrieval_result with
     | Error e ->
       { acc with errors = Index_error (topic, e) :: acc.errors }
     | Ok index_entries ->

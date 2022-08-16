@@ -20,3 +20,5 @@ dune exec src/demo.exe  226.51s user 32.93s system 98% cpu 4:24.11 total
 Next: create a job to compute a hash of an article based on the hash of its text and its referenced dependencies'
 
 IDEA: instead of computing hash, look for missing articles
+
+NEXT: run shallow checker in MultiWorker (will need to use shared memory)

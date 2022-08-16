@@ -67,6 +67,17 @@ module Daemon = Daemon.MakeDaemon
 module WorkerCancel = WorkerCancel.MakeWorkerCancel
     (Utils)
 
+module SMTelemetry = SharedMem.MakeSMTelemetry
+    (Core)
+    (Telemetry)
+
+module SharedMemHashTable = SharedMem.ImmediateBackend
+    (Core)
+    (Measure)
+    (SMTelemetry)
+
+module SM = SharedMem
+
 module SharedMem = SharedMem.SharedMem
 
 module Worker = Worker.MakeWorker

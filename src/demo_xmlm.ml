@@ -5,7 +5,7 @@ type article = {
   topic: string;
   hash: int64;
   resolved_deps: int64 list;
-  unresolved_deps: string list;
+  deps: string list;
 }
 
 let to_topic substrings =
@@ -59,8 +59,8 @@ let examine_article ~log i =
           begin
             match extract_data i with
             | Some text ->
-              let (hash, unresolved_deps) = examine_text text in
-              let article = { topic; hash; unresolved_deps; resolved_deps = [] } in
+              let (hash, deps) = examine_text text in
+              let article = { topic; hash; deps; resolved_deps = [] } in
               process (article :: articles) None i (depth + 1)
             | None ->
               Printf.printf "No text in %s\n" topic;

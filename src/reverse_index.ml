@@ -22,17 +22,30 @@ type entry = {
   id: int64;
   name: string;
 }
+[@@deriving show]
 
 type retrieval_entry = {
   entry: entry;
   hash: int64;
   canon_hash: int64;
 }
+[@@deriving show]
+
+type index_entry = {
+  hash: int64;
+  canon_hash: int64;
+  name: string;
+}
+[@@deriving show]
+
+type retrieval_error = {
+  retrieval_context: index_entry;
+  message: string;
+}
+[@@deriving show]
 
 type insertion_error = {
-  hash: Int64.t;
-  canon_hash: Int64.t;
-  name: string;
+  insertion_context: index_entry;
   origin_exception: Exception.t;
   [@printer (fun fmt e -> fprintf fmt "%s" (Exception.get_ctor_string e))]
 }
@@ -51,7 +64,14 @@ let insert_safe ~name ~hash ~canon_hash f :
   try Ok (f ()) with
   | e ->
     let origin_exception = Exception.wrap e in
-    Error { hash; canon_hash; name; origin_exception }
+    Error {
+      insertion_context = {
+        hash;
+        canon_hash;
+        name;
+      };
+      origin_exception
+    }
 
 module StatementCache = struct
   type t = {
@@ -195,7 +215,16 @@ module SymbolTable = struct
         failwith
           (Printf.sprintf "Failure retrieving row: %s" (Sqlite3.Rc.to_string rc))
     in
-    loop []
+    match loop [] with
+    | [] -> Error { 
+        retrieval_context = {
+          hash = Murmur3.hash64 name;
+          canon_hash;
+          name;
+        };
+        message = (Printf.sprintf "Entries corresponding to %s not found in the index" name);
+      }
+    | entries -> Ok entries
 end
 
 let save_name stmt_cache ~name ~id ~offset : (unit, insertion_error) result =
@@ -326,14 +355,14 @@ let save_names db_name next_seq : save_result =
   IngestionDbCache.close ingestion_cache;
   save_result
 
-let get (db_cache : QueryDbCache.t) name : retrieval_entry list =
+let get (db_cache : QueryDbCache.t) name : (retrieval_entry list, retrieval_error) result =
   SymbolTable.get
     (QueryDbCache.db db_cache name)
     name
     SymbolTable.get_sqlite
 
 module type REVERSE_INDEX = sig
-  val get_entries : string -> retrieval_entry list
+  val get_entries : string -> (retrieval_entry list, retrieval_error) result
 end
 
 module SqliteIndex = struct
@@ -344,7 +373,8 @@ module SqliteIndex = struct
 
   let get_entries name =
     match !db_cache with
-    | Some db_cache -> get db_cache name
+    | Some db_cache ->
+      get db_cache name
     | None -> failwith "DB Cache not set!"
 end
 

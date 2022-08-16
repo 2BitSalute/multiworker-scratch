@@ -19,7 +19,106 @@ type article_result =
   | Deps of int64 * string list
   | NotFound of string
 
-module Checker (Index : Reverse_index.REVERSE_INDEX) (Catalog : Demo_catalog.CATALOG) = struct
+let skipped_prefixes = [
+  "image:";
+  "file:";
+  ":file:";
+  "commons:";
+  ":template:";
+  "wikipedia:";
+  "wikt:";
+  "wp:";
+]
+
+module type ARTICLE_CACHE = sig
+  val mem : string -> bool
+end
+
+module SharedMemArticleCache : ARTICLE_CACHE = struct
+  let mem _topic = failwith "TODO: Not imlemented"
+end
+
+module HashTableArticleCache : ARTICLE_CACHE = struct
+  let cache = Hashtbl.create 1000
+
+  let mem = Hashtbl.mem cache
+end
+
+module ShallowChecker
+    (Index : Reverse_index.REVERSE_INDEX)
+    (Catalog : Demo_catalog.CATALOG)
+    (ArticleCache : ARTICLE_CACHE) = struct
+
+  type error = 
+    | Catalog_error of string * Demo_catalog.catalog_error
+    | Index_error of string * Reverse_index.retrieval_error
+
+  type result = {
+    unchecked: Reverse_index.retrieval_entry list;
+    errors: error list;
+  }
+
+  let empty_result = {
+    unchecked = [];
+    errors = [];
+  }
+
+  let get_unresolved_deps deps : string list =
+    List.fold_left
+      (fun unresolved dep -> if ArticleCache.mem dep then unresolved else dep :: unresolved)
+      []
+      deps
+
+  let get_index_entries name unresolved : result =
+    List.fold_left
+      (fun result dep ->
+         match Index.get_entries dep with
+         | Error e -> { result with errors = Index_error (name, e) :: result.errors }
+         | Ok index_entries -> { result with unchecked = List.rev_append index_entries result.unchecked }
+      )
+      empty_result
+      unresolved
+
+  let check_indexed_article (acc: result) (index_entry: Reverse_index.retrieval_entry) =
+    let name = index_entry.Reverse_index.entry.name in
+    let offset = index_entry.Reverse_index.entry.offset in
+    match Catalog.get_article name offset with
+    | Error e ->
+      (* Hash collision or some other error - the article is not actually in the stream, or the stream is corrupted *)
+      {
+        acc with
+        errors = Catalog_error (name, e) :: acc.errors
+      }
+    | Ok articles ->
+      let loop acc article =
+        (* Filter to the topics that aren't in the cache *)
+        let unresolved = get_unresolved_deps article.Demo_xmlm.deps in
+        let result = get_index_entries name unresolved in
+        {
+          errors = List.rev_append result.errors acc.errors;
+          unchecked = List.rev_append result.unchecked acc.unchecked
+        }
+      in
+      List.fold_left loop acc articles
+
+  let check_article_deps acc topic =
+    match Index.get_entries topic with
+    | Error e ->
+      { acc with errors = Index_error (topic, e) :: acc.errors }
+    | Ok index_entries ->
+      List.fold_left check_indexed_article acc index_entries
+
+  let check_article_deps topics : result =
+    (* TODO: this function should:
+       1. retrieve the topic from the index
+       2. retrieve topic from catalog
+       3. retrieve from index its dependencies *)
+    (* It should produce errors as well as the unresolved dependencies in the form of index records *)
+    (* It should also store checked articles in the article cache *)
+    List.fold_left check_article_deps empty_result topics
+end
+
+module TransitiveChecker (Index : Reverse_index.REVERSE_INDEX) (Catalog : Demo_catalog.CATALOG) = struct
   let hashed_articles = Hashtbl.create 1000
 
   let get_deps deps : (int64 list * string list) =
@@ -37,18 +136,17 @@ module Checker (Index : Reverse_index.REVERSE_INDEX) (Catalog : Demo_catalog.CAT
       hash
       deps
 
-  let check_indexed_article acc (index_entry: Reverse_index.retrieval_entry) =
+  let check_indexed_article acc (index_entry: Reverse_index.retrieval_entry) : article_result list =
     let name = index_entry.Reverse_index.entry.name in
     let offset = index_entry.Reverse_index.entry.offset in
     match Catalog.get_article name offset with
-    | [] ->
-      (* Hash collision - the article is not actually in the stream *)
-      (* Printf.printf "Hash collision\n"; *)
+    | Error _ ->
+      (* Hash collision or some other error - the article is not actually in the stream, or the stream is corrupted *)
       acc
-    | articles ->
+    | Ok articles ->
       let f article =
         (* Filter to the topics that aren't in the cache *)
-        let (resolved, unresolved) = get_deps article.Demo_xmlm.unresolved_deps in
+        let (resolved, unresolved) = get_deps article.Demo_xmlm.deps in
         (* If all the topics are in the cache, then get their hashes, compute *)
         if List.length unresolved = 0 then
           let article_hash = compute_article_hash article.Demo_xmlm.hash resolved in
@@ -59,27 +157,16 @@ module Checker (Index : Reverse_index.REVERSE_INDEX) (Catalog : Demo_catalog.CAT
       in
       List.rev_append acc (List.map f articles)
 
-  let check_article topic : article_result list =
+  let check_article topic =
     (* Printf.printf "Checking topic %s\n%!" topic; *)
     (* Get topic offsets *)
     match Index.get_entries topic with
-    | [] ->
+    | Error _ ->
       (* Printf.printf "%s not found!\n" topic; *)
       [ NotFound topic ]
-    | index_entries -> (* TODO: how to resolve duplicates? *)
+    | Ok index_entries -> (* TODO: how to resolve duplicates? *)
       (* Printf.printf "Found %d matches for topic '%s'\n" (List.length index_entries) topic; *)
       List.fold_left check_indexed_article [] index_entries
-
-  let skipped_prefixes = [
-    "image:";
-    "file:";
-    ":file:";
-    "commons:";
-    ":template:";
-    "wikipedia:";
-    "wikt:";
-    "wp:";
-  ]
 
   let rec check_article_transitively stack topic : int64 list =
     let process_result acc result : int64 list =
@@ -272,7 +359,7 @@ let () =
             Printf.printf "%s %s %d\n"
               article.topic
               (Int64.to_string article.hash)
-              (List.length article.unresolved_deps))
+              (List.length article.deps))
         articles;
     end;
 
@@ -291,11 +378,11 @@ let () =
   let query_db_cache = Reverse_index.QueryDbCache.make db_name in
   Reverse_index.SqliteIndex.init query_db_cache;
 
-  let module Checker = Checker (Reverse_index.SqliteIndex) (Demo_catalog.XmlCatalog) in
+  let module TransitiveChecker = TransitiveChecker (Reverse_index.SqliteIndex) (Demo_catalog.XmlCatalog) in
 
   if should_check_article then
     begin
-      match Checker.check_article_transitively "continent" with
+      match TransitiveChecker.check_article_transitively "continent" with
       | [] -> failwith "This should not happen; no results?"
       | hashes -> List.iter (fun hash -> Printf.printf "Final hash is %s\n" (Int64.to_string hash)) hashes
     end;

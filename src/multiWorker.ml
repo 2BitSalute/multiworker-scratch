@@ -78,7 +78,13 @@ module MakeMultiWorker
 
   let call_with_worker_id = Call.call
 
-  let call workers ~job ~merge ~neutral ~next =
+  let call
+      workers
+      ~(job: 'acc -> 'input -> 'job_result)
+      ~(merge: 'job_result -> 'acc -> 'acc)
+      ~(neutral: 'acc)
+      ~(next: 'input MultiThreadedCall.Bucket.next)
+    : 'acc =
     let job (_worker_id, a) b = job a b in
     let merge (_worker_id, a) b = merge a b in
     Call.call workers ~job ~merge ~neutral ~next

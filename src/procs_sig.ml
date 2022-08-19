@@ -86,7 +86,7 @@ module type WORKERCONTROLLER = sig
   (* If the worker is busy, what is it doing. Note that calling this is not
    * type safe: 'a and 'b are free type variables, and they depend on what is the
    * job being executed by worker. *)
-  val get_handle_UNSAFE : worker -> ('a, 'b) handle option
+  val get_handle_UNSAFE : worker -> ('job, 'result) handle option
 
   (* If the worker isn't prespawned, spawn the worker *)
   val spawn : worker -> (void, Worker.request) Worker.Daemon.handle
@@ -100,13 +100,13 @@ module type WORKERCONTROLLER = sig
 
   (* The first bool parameter specifies whether to use worker clones
    * or not: for non-longlived-workers, we must clone. *)
-  type 'a worker_params = {
+  type 'state worker_params = {
     longlived_workers: bool;
-    entry_state: 'a entry_state;
+    entry_state: 'state entry_state;
     controller_fd: Unix.file_descr option;
   }
 
-  type 'a entry = ('a worker_params, Worker.request, void) Worker.Daemon.entry
+  type 'state entry = ('state worker_params, Worker.request, void) Worker.Daemon.entry
 
   (* Creates a pool of workers. *)
   val make :
@@ -114,42 +114,42 @@ module type WORKERCONTROLLER = sig
       (* See docs in WorkerController.worker for call_wrapper. *)
       call_wrapper ->
     longlived_workers:bool ->
-    saved_state:'a ->
-    entry:'a entry ->
+    saved_state:'state ->
+    entry:'state entry ->
     int ->
     gc_control:Gc.control ->
     heap_handle:SharedMem.handle ->
     worker list
 
   (* Call in a sub-process (CAREFUL, GLOBALS ARE COPIED) *)
-  val call : ?call_id:int -> worker -> ('a -> 'b) -> 'a -> ('a, 'b) handle
+  val call : ?call_id:int -> worker -> ('job -> 'result) -> 'job -> ('job, 'result) handle
 
   (* See MultiThreadedCall.call_id *)
-  val get_call_id : ('a, 'b) handle -> int
+  val get_call_id : ('job, 'result) handle -> int
 
   (* Retrieves the job that the worker is currently processing *)
-  val get_job : ('a, 'b) handle -> 'a
+  val get_job : ('job, 'result) handle -> 'job
 
   (* Retrieves the result (once the worker is done) hangs otherwise *)
-  val get_result : ('a, 'b) handle -> 'b
+  val get_result : ('job, 'result) handle -> 'result
 
   (* Selects among multiple handles those which are ready. *)
-  type ('a, 'b) selected = {
-    readys: ('a, 'b) handle list;
-    waiters: ('a, 'b) handle list;
+  type ('job, 'result) selected = {
+    readys: ('job, 'result) handle list;
+    waiters: ('job, 'result) handle list;
     (* Additional (non worker) ready fds that we selected on. *)
     ready_fds: Unix.file_descr list;
   }
 
-  val select : ('a, 'b) handle list -> Unix.file_descr list -> ('a, 'b) selected
+  val select : ('job, 'result) handle list -> Unix.file_descr list -> ('job, 'result) selected
 
   (* Returns the worker which produces this handle *)
-  val get_worker : ('a, 'b) handle -> worker
+  val get_worker : ('job, 'result) handle -> worker
 
   (* Force quit the workers *)
   val force_quit_all : unit -> unit
 
-  val cancel : ('a, 'b) handle list -> unit
+  val cancel : ('job, 'result) handle list -> unit
 
 end
 
@@ -185,43 +185,43 @@ module type MULTITHREADEDCALL = sig
 
   type worker_id = int
 
-  val no_interrupt : 'a -> 'a interrupt_config
+  val no_interrupt : 'env -> 'env interrupt_config
 
   (** Can raise Coalesced_failures exception. *)
   val call :
     WorkerController.worker list ->
-    ('c -> 'a -> 'b) ->
-    ('b -> 'c -> 'c) ->
-    'c ->
-    'a Bucket.next ->
-    'c
+    ('acc -> 'input -> 'job_result) ->
+    ('job_result -> 'acc -> 'acc) ->
+    'acc ->
+    'input Bucket.next ->
+    'acc
 
   (** Invokes merge with a unique worker id.
       Can raise Coalesced_failures exception. *)
   val call_with_worker_id :
     WorkerController.worker list ->
-    (worker_id * 'c -> 'a -> 'b) ->
-    (worker_id * 'b -> 'c -> 'c) ->
-    'c ->
-    'a Bucket.next ->
-    'c
+    (worker_id * 'acc -> 'input -> 'job_result) ->
+    (worker_id * 'job_result -> 'acc -> 'acc) ->
+    'acc ->
+    'input Bucket.next ->
+    'acc
 
   (** The last element returned, a list of job inputs, are the job inputs which have not been
       processed fully or at all due to interrupts. *)
   val call_with_interrupt :
     WorkerController.worker list ->
-    ('c -> 'a -> 'b) ->
-    ('b -> 'c -> 'c) ->
-    'c ->
-    'a Bucket.next ->
+    ('acc -> 'input -> 'job_result) ->
+    ('job_result -> 'acc -> 'acc) ->
+    'acc ->
+    'input Bucket.next ->
     ?on_cancelled:
       ((* [on_cancelled] should be specified if your [next] function ever returns
           [Bucket.Wait], and it should return the list of all jobs that haven't
           finished or started yet. *)
         unit ->
-        'a list) ->
-    'd interrupt_config ->
-    'c * 'd * 'a list
+        'input list) ->
+    'env interrupt_config ->
+    'acc * 'env * 'input list
 
   val on_exception : (Exception.t -> unit) -> unit
 end
@@ -236,11 +236,11 @@ module type CALLER = sig
 
   val multi_threaded_call :
     WorkerController.worker list ->
-    (WorkerController.worker_id * 'c -> 'a -> 'b) ->
-    (WorkerController.worker_id * 'b -> 'c -> 'c) ->
-    'c ->
-    'a Bucket.next ->
-    'c result
+    (WorkerController.worker_id * 'acc -> 'input -> 'job_result) ->
+    (WorkerController.worker_id * 'job_result -> 'acc -> 'acc) ->
+    'acc ->
+    'input Bucket.next ->
+    'acc result
 end
 
 module type MULTIWORKER = sig
@@ -250,34 +250,34 @@ module type MULTIWORKER = sig
   type worker
 
   (* List of file descriptors that became ready (and triggered interruption),
-   * returns whether current job should be cancelled *)
-  type 'a interrupt_config = 'a MultiThreadedCall.interrupt_config
+   * returns whether the current job should be cancelled *)
+  type 'env interrupt_config = 'env MultiThreadedCall.interrupt_config
 
   val next :
     ?progress_fn:(total:int -> start:int -> length:int -> unit) ->
     ?max_size:int ->
     worker list option ->
-    'a list ->
-    'a list MultiThreadedCall.Bucket.next
+    'input list ->
+    'input list MultiThreadedCall.Bucket.next
 
   (* Can raise MultiThreadedCall.Coalesced_failures unless in single-threaded mode. *)
   val call :
     worker list option ->
-    job:('c -> 'a -> 'b) ->
-    merge:('b -> 'c -> 'c) ->
-    neutral:'c ->
-    next:'a MultiThreadedCall.Bucket.next ->
-    'c
+    job:('acc -> 'input -> 'job_result) ->
+    merge:('job_result -> 'acc -> 'acc) ->
+    neutral:'acc ->
+    next:'input MultiThreadedCall.Bucket.next ->
+    'acc
 
   type call_wrapper = {
     f:
-      'a 'b 'c.
+      'input 'job_result 'acc.
         worker list option ->
-      job:('c -> 'a -> 'b) ->
-      merge:('b -> 'c -> 'c) ->
-      neutral:'c ->
-      next:'a MultiThreadedCall.Bucket.next ->
-      'c;
+      job:('acc -> 'input -> 'job_result) ->
+      merge:('job_result -> 'acc -> 'acc) ->
+      neutral:'acc ->
+      next:'input MultiThreadedCall.Bucket.next ->
+      'acc;
   }
 
   val wrapper : call_wrapper
@@ -285,11 +285,11 @@ module type MULTIWORKER = sig
   (* Can raise MultiThreadedCall.Coalesced_failures unless in single-threaded mode. *)
   val call_with_worker_id :
     worker list option ->
-    job:(MultiThreadedCall.WorkerController.worker_id * 'c -> 'a -> 'b) ->
-    merge:(MultiThreadedCall.WorkerController.worker_id * 'b -> 'c -> 'c) ->
-    neutral:'c ->
-    next:'a MultiThreadedCall.Bucket.next ->
-    'c
+    job:(MultiThreadedCall.WorkerController.worker_id * 'acc -> 'input -> 'job_result) ->
+    merge:(MultiThreadedCall.WorkerController.worker_id * 'job_result -> 'acc -> 'acc) ->
+    neutral:'acc ->
+    next:'input MultiThreadedCall.Bucket.next ->
+    'acc
 
   (** The last element returned, a list of job inputs, are the job inputs which have not been
       processed fully or at all due to interrupts. *)
@@ -299,14 +299,14 @@ module type MULTIWORKER = sig
           [Hh_bucket.Wait], and it should return the list of all jobs that haven't
           finished or started yet. *)
         unit ->
-        'a list) ->
+        'input list) ->
     worker list option ->
-    job:('c -> 'a -> 'b) ->
-    merge:('b -> 'c -> 'c) ->
-    neutral:'c ->
-    next:'a MultiThreadedCall.Bucket.next ->
-    interrupt:'d interrupt_config ->
-    'c * 'd * 'a list
+    job:('acc -> 'input -> 'job_result) ->
+    merge:('job_result -> 'acc -> 'acc) ->
+    neutral:'acc ->
+    next:'input MultiThreadedCall.Bucket.next ->
+    interrupt:'env interrupt_config ->
+    'acc * 'env * 'input list
 
   (* Creates a pool of workers. *)
   val make :
@@ -314,8 +314,8 @@ module type MULTIWORKER = sig
       (* See docs in WorkerController.worker for call_wrapper. *)
       MultiThreadedCall.WorkerController.call_wrapper ->
     longlived_workers:bool ->
-    saved_state:'a ->
-    entry:'a MultiThreadedCall.WorkerController.entry ->
+    saved_state:'state ->
+    entry:'state MultiThreadedCall.WorkerController.entry ->
     int ->
     gc_control:Gc.control ->
     heap_handle:MultiThreadedCall.WorkerController.SharedMem.handle ->

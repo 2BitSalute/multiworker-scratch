@@ -12,12 +12,29 @@ module Daemon = MultiWorker.MultiThreadedCall.WorkerController.Worker.Daemon
 module SharedMem = MultiWorker.MultiThreadedCall.WorkerController.SharedMem
 module WorkerController = MultiWorker.MultiThreadedCall.WorkerController
 
-(* Data model for Wikipedia jobs *)
+module WorkItem = struct
+  type t =
+    | Topic of string
+    | IndexEntry of Reverse_index.retrieval_entry
 
-type article_result =
-  | Hash of int64
-  | Deps of int64 * string list
-  | NotFound of string
+  let compare item1 item2 : int =
+    match (item1, item2) with
+    | (Topic topic1, Topic topic2) ->
+      String.compare topic1 topic2
+    | (IndexEntry { entry = { name = topic2; _ }; _ }, Topic topic1)
+    | (Topic topic1, IndexEntry { entry = { name = topic2; _ }; _ }) ->
+      let comparison = String.compare topic1 topic2 in
+      (* If names are the same, then always consider the Topic to be greater than the IndexEntry *)
+      if comparison = 0 then 1 else comparison
+    | (IndexEntry { entry = { name = topic1; id = id1; offset = offset1 }; _ },
+       IndexEntry { entry = { name = topic2; id = id2; offset = offset2 }; _ }) ->
+      let comparison = String.compare topic1 topic2 in
+      let comparison = if comparison = 0 then Int64.compare id1 id2 else comparison in
+      let comparison = if comparison = 0 then Int64.compare offset1 offset2 else comparison in
+      comparison
+end
+
+module WorkItemSet = Set.Make(WorkItem)
 
 let skipped_prefixes = [
   "image:";
@@ -74,7 +91,7 @@ module ShallowChecker
     | Index_error of string * Reverse_index.retrieval_error
 
   type result = {
-    unchecked: Reverse_index.retrieval_entry list;
+    unchecked: WorkItem.t list;
     errors: error list;
   }
 
@@ -94,7 +111,12 @@ module ShallowChecker
       (fun result dep ->
          match Index.get_entries dep with
          | Error e -> { result with errors = Index_error (name, e) :: result.errors }
-         | Ok index_entries -> { result with unchecked = List.rev_append index_entries result.unchecked }
+         | Ok index_entries -> {
+             result with
+             unchecked = List.rev_append
+                 (List.map (fun index_entry -> WorkItem.IndexEntry index_entry) index_entries)
+                 result.unchecked
+           }
       )
       empty_result
       unresolved
@@ -121,24 +143,70 @@ module ShallowChecker
       in
       List.fold_left loop acc articles
 
-  let check_article_deps acc topic =
-    let retrieval_result = Index.get_entries topic  in
-    ArticleCache.add topic retrieval_result;
-    match retrieval_result with
-    | Error e ->
-      { acc with errors = Index_error (topic, e) :: acc.errors }
-    | Ok index_entries ->
-      List.fold_left check_indexed_article acc index_entries
+  let check_article_deps acc work_item =
+    match work_item with
+    | WorkItem.Topic topic ->
+      begin
+        let retrieval_result = Index.get_entries topic  in
+        ArticleCache.add topic retrieval_result;
+        match retrieval_result with
+        | Error e ->
+          { acc with errors = Index_error (topic, e) :: acc.errors }
+        | Ok index_entries ->
+          List.fold_left check_indexed_article acc index_entries
+      end
+    | WorkItem.IndexEntry entry -> check_indexed_article acc entry
 
-  let check_article_deps topics : result =
+  let check_article_deps work_items : result =
     (* TODO: this function should:
        1. retrieve the topic from the index
        2. retrieve topic from catalog
        3. retrieve from index its dependencies *)
     (* It should produce errors as well as the unresolved dependencies in the form of index records *)
     (* It should also store checked articles in the article cache *)
-    List.fold_left check_article_deps empty_result topics
+    List.fold_left check_article_deps empty_result work_items
 end
+
+let next
+    (workers : MultiWorker.worker list option)
+    (work_items_to_process : WorkItem.t list ref)
+    (work_items_in_progress : WorkItemSet.t ref)
+  : unit -> WorkItem.t list Bucket.bucket =
+  let max_size = Bucket.max_size () in
+  let num_workers =
+    match workers with
+    | Some w -> List.length w
+    | None -> 1
+  in
+  let return_bucket_job ~current_bucket ~remaining_jobs =
+    (* Update our shared mutable state, because hey: it's not like we're
+       writing OCaml or anything. *)
+    work_items_to_process := remaining_jobs;
+    work_items_in_progress := List.fold_left (fun item acc -> WorkItemSet.add acc item) !work_items_in_progress current_bucket;
+    Bucket.Job current_bucket
+  in
+  let rec split_n acc l n =
+    match (n, l) with
+    | 0, _ | _, [] -> (acc, l)
+    | n, head :: rest ->
+      split_n (head :: acc) rest (n - 1)
+  in
+  fun () ->
+    let bucket_size =
+      Bucket.calculate_bucket_size
+        ~num_jobs:(List.length !work_items_to_process)
+        ~num_workers
+        ~max_size
+    in
+    let (current_bucket, remaining_jobs) =
+      split_n [] !work_items_to_process bucket_size
+    in
+    return_bucket_job ~current_bucket ~remaining_jobs
+
+type article_result =
+  | Hash of int64
+  | Deps of int64 * string list
+  | NotFound of string
 
 module TransitiveChecker (Index : Reverse_index.REVERSE_INDEX) (Catalog : Demo_catalog.CATALOG) = struct
   let hashed_articles = Hashtbl.create 1000
@@ -313,16 +381,16 @@ let () =
 
   let workers = init () in
   let workers = Some workers in
-  let job (c: int list) (a: int list) =
+  let job (acc: int list) (input: int list) =
     (* Is c the accumulator (seems to be inited by neutral), and a the input? *)
-    ignore (c, a);
-    PidLog.log (Printf.sprintf "Job! %d %d\n" (List.length c) (List.hd a));
-    List.fold_left (fun acc el -> acc + el) 0 a;
+    ignore (acc, input);
+    PidLog.log (Printf.sprintf "Job! %d %d\n" (List.length acc) (List.hd input));
+    List.fold_left (fun acc el -> acc + el) 0 input;
   in
-  let merge (b: int) (acc: int list) : int list =
-    ignore b;
-    PidLog.log (Printf.sprintf "Merge: %d %d\n" b (List.length acc));
-    b :: acc
+  let merge (job_result: int) (acc: int list) : int list =
+    ignore job_result;
+    PidLog.log (Printf.sprintf "Merge: %d %d\n" job_result (List.length acc));
+    job_result :: acc
   in
 
   let (c: int list) = MultiWorker.call

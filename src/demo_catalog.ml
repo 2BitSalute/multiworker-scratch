@@ -7,6 +7,7 @@ type catalog_error = {
 
 module type CATALOG = sig
   val get_article : string -> int64 -> (Demo_xmlm.article list, catalog_error) result
+  val collect_offset_cache_hits : unit -> int
 end
 
 module TestCatalog = struct
@@ -25,6 +26,8 @@ module TestCatalog = struct
   let get_article topic offset : Demo_xmlm.article list =
     ignore offset;
     [ Hashtbl.find parsed_articles topic ]
+
+  let collect_offset_cache_hits () = 0
 end
 
 module type OFFSET_CACHE = sig
@@ -92,6 +95,12 @@ module MakeXmlCatalog
     (OffsetCache: OFFSET_CACHE)
     (ParsedArticleCache: PARSED_ARTICLE_CACHE)
     (Logger: LOGGER) : CATALOG = struct
+  let offset_cache_hits = ref 0
+
+  let collect_offset_cache_hits () =
+    let result = !offset_cache_hits in
+    offset_cache_hits := 0;
+    result
 
   let parse_with_retry buffer : Demo_xmlm.article list =
     try
@@ -113,7 +122,7 @@ module MakeXmlCatalog
 
   let matching_error topic offset =
     let message =
-      Printf.sprintf "No parsed articles under topic '%s' at offset %s\n" topic (Int64.to_string offset)
+      Printf.sprintf "No parsed articles under topic '%s' at offset %s" topic (Int64.to_string offset)
     in
     Logger.error "%s" message;
     Error {
@@ -168,10 +177,15 @@ module MakeXmlCatalog
         | Error _ as e -> e
       end
     else
-      match ParsedArticleCache.get topic with
-      | None ->
-        matching_error topic offset
-      | Some articles -> Ok articles
+      begin
+        offset_cache_hits := !offset_cache_hits + 1;
+        let result = match ParsedArticleCache.get topic with
+          | None ->
+            matching_error topic offset
+          | Some articles -> Ok articles
+        in
+        result
+      end
 end
 
-module XmlCatalog = MakeXmlCatalog (HashTableOffsetCache) (HashTableParsedArticleCache) (NullLogger)
+module HashTableXmlCatalog = MakeXmlCatalog (HashTableOffsetCache) (HashTableParsedArticleCache) (NullLogger)

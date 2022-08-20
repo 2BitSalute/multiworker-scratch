@@ -12,7 +12,9 @@ let to_topic substrings =
   let s = Pcre.get_substring substrings 1 in
   try
     let strings = Pcre.split ~pat:"\\|" ~max:0 s in
-    List.hd (Pcre.split ~pat:"#" ~max:0 (List.hd strings))
+    let topic = List.hd (Pcre.split ~pat:"#" ~max:0 (List.hd strings)) in
+    if topic = "" then failwith "Empty topic - likely a reference to the section"
+    else topic
   with _ ->
     (* If there's something wrong with the title, it'll be reported as not found *)
     (* Example of an invalid title: [[#|see section]] in the CBS Morning News article *)

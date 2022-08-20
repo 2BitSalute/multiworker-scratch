@@ -47,11 +47,11 @@ module SharedMem : SharedMem_sig.SHAREDMEM = struct
         (* 20 * gig; *)
         2 * gig;
       dep_table_pow =
-        5;
+        17;
       (* 17; *)
       (* 1 << 17 *)
       hash_table_pow =
-        5;
+        18;
       (* 18; *)
       (* 1 << 18 *)
       shm_dirs = [GlobalConfig.shm_dir; GlobalConfig.tmp_dir];

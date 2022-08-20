@@ -21,4 +21,29 @@ Next: create a job to compute a hash of an article based on the hash of its text
 
 IDEA: instead of computing hash, look for missing articles
 
-NEXT: run shallow checker in MultiWorker (will need to use shared memory)
+Next: run shallow checker in MultiWorker (will need to use shared memory)
+
+Next: double-check if we're actually caching the offsets and the articles. I think not.
+Try different size jobs.
+
+Test of 500 work items:
+
+SharedMemXmlCatalog:
+Telemetry:
+    Total time: 48.4398369789
+    Time in catalog: 383.6317710876
+    Time in index: 64.0354182720
+    Cache time: 0.7987151146
+    Other time: 0.0281863213
+    Cache hits: 138083
+    Cache misses: 84328
+
+HashTableXmlCatalog:
+Telemetry:
+    Total time: 67.0519320965
+    Time in catalog: 558.8913812637
+    Time in index: 61.3832283020
+    Cache time: 1.1174175739
+    Other time: 0.0198464394
+    Cache hits: 74492
+    Cache misses: 84073

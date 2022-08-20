@@ -222,7 +222,7 @@ module SymbolTable = struct
           canon_hash;
           name;
         };
-        message = (Printf.sprintf "Entries corresponding to %s not found in the index" name);
+        message = (Printf.sprintf "Entries corresponding to `%s` not found in the index" name);
       }
     | entries -> Ok entries
 end
@@ -356,10 +356,30 @@ let save_names db_name next_seq : save_result =
   save_result
 
 let get (db_cache : QueryDbCache.t) name : (retrieval_entry list, retrieval_error) result =
-  SymbolTable.get
-    (QueryDbCache.db db_cache name)
-    name
-    SymbolTable.get_sqlite
+  try
+    SymbolTable.get
+      (QueryDbCache.db db_cache name)
+      name
+      SymbolTable.get_sqlite
+  with e ->
+    let backtrace = Printexc.get_backtrace () in
+    let e = Printexc.to_string e in
+    let message =
+      Printf.sprintf
+        "Problem getting name `%s` at\n%s\n%s"
+        name
+        e
+        backtrace
+    in
+    Printf.printf "MESSAGE: %s\n%!" message;
+    Error {
+      retrieval_context = {
+        hash = 0L;
+        canon_hash = 0L;
+        name;
+      };
+      message;
+    }
 
 module type REVERSE_INDEX = sig
   val get_entries : string -> (retrieval_entry list, retrieval_error) result

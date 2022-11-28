@@ -147,7 +147,7 @@
 
 (executable
  (name demo)
- (public_name demo)
+ (public_name multiworker)
  (modules demo_bz2 demo demo_catalog demo_domains demo_setup demo_xmlm)
  (libraries
   camlbz2

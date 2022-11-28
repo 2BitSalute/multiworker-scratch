@@ -47,3 +47,5 @@ Telemetry:
     Other time: 0.0198464394
     Cache hits: 74492
     Cache misses: 84073
+
+Next: implement checking using domains
